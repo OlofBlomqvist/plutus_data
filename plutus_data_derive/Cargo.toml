@@ -3,7 +3,7 @@ name = "plutus_data_derive"
 version = "0.0.1"
 edition = "2021"
 authors = ["Olof Blomqvist <olof@twnet.se>"]
-repository = "https://github.com/OlofBlomqvist/plutus_data_derive"
+repository = "https://github.com/OlofBlomqvist/plutus_data"
 description = "you probably want to reference the plutus_data crate and not this one"
 
 [dependencies]
