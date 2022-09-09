@@ -5,6 +5,7 @@ edition = "2021"
 authors = ["Olof Blomqvist <olof@twnet.se>"]
 repository = "https://github.com/OlofBlomqvist/plutus_data"
 description = "you probably want to reference the plutus_data crate and not this one"
+license-file = "licence"
 
 [dependencies]
 syn = { version="1.0.99", features=["parsing"] }

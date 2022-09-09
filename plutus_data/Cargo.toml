@@ -5,6 +5,7 @@ edition = "2021"
 authors = ["Olof Blomqvist <olof@twnet.se>"]
 description = "derive macros for converting between rust data types and plutus-data"
 repository = "https://github.com/OlofBlomqvist/plutus_data"
+license-file = "licence"
 
 [dependencies]
 plutus_data_derive = { path = "../plutus_data_derive"}
