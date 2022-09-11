@@ -17,8 +17,8 @@ pub (crate) fn emit_msg(ident_span:&syn::Ident,x:&str,lvl:proc_macro::Level) {
 }
 
 #[allow(dead_code)]
-pub (crate) fn info(ident_span:&syn::Ident,x:&str) {
-    emit_msg(ident_span,x,proc_macro::Level::Note);
+pub (crate) fn info(_ident_span:&syn::Ident,_x:&str) {
+    //emit_msg(ident_span,x,proc_macro::Level::Note);
 }
 
 #[allow(dead_code)]
@@ -31,25 +31,13 @@ pub (crate) fn warn(ident_span:&syn::Ident,x:&str) {
     emit_msg(ident_span,x,proc_macro::Level::Warning);
 }
 
-pub (crate) fn type_to_str(x:&syn::Type) -> String {
-    match x.clone() {
-        syn::Type::Path(type_path) => type_path.clone().into_token_stream().to_string().replace(" ", ""),
-        syn::Type::Array(a) => {
-            let eltype = type_to_str(&a.elem).replace(" ", "");
-            format!("Vec<{}>",eltype)
-        },
-        _ => unimplemented!(),
-    }
-}
-
 mod encoding;
 mod decoding;
-
 use encoding::*;
 use decoding::*;
 
 
-#[proc_macro_derive(ToPlutusDataDerive,attributes(base_16,force_variant))]
+#[proc_macro_derive(ToPlutusDataDerive,attributes(base_16,force_variant,repr_bool_as_num))]
 pub fn to_plutus_data_macro(input: TokenStream) -> TokenStream {
 
     let input = parse_macro_input!(input as DeriveInput);
@@ -85,7 +73,7 @@ pub fn to_plutus_data_macro(input: TokenStream) -> TokenStream {
 
 
 
-#[proc_macro_derive(FromPlutusDataDerive)]
+#[proc_macro_derive(FromPlutusDataDerive,attributes(base_16,force_variant,repr_bool_as_num))]
 pub fn from_plutus_data_macro(input: TokenStream) -> TokenStream {
 
     let input = parse_macro_input!(input as DeriveInput);

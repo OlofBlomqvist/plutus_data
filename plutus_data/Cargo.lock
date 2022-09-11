@@ -368,8 +368,6 @@ dependencies = [
 [[package]]
 name = "plutus_data_derive"
 version = "0.0.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7c5285b9e60b8efa6516a94afef659bcfcf34a6d54757bce8bc7a8e45b4e30ee"
 dependencies = [
  "cardano-multiplatform-lib",
  "hex",
