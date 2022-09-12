@@ -37,7 +37,7 @@ use encoding::*;
 use decoding::*;
 
 
-#[proc_macro_derive(ToPlutusDataDerive,attributes(base_16,force_variant,repr_bool_as_num))]
+#[proc_macro_derive(ToPlutusDataDerive,attributes(base_16,force_variant,repr_bool_as_num,ignore_container))]
 pub fn to_plutus_data_macro(input: TokenStream) -> TokenStream {
 
     let input = parse_macro_input!(input as DeriveInput);
@@ -59,21 +59,21 @@ pub fn to_plutus_data_macro(input: TokenStream) -> TokenStream {
 
         Data::Struct(DataStruct {fields: Fields::Unnamed(FieldsUnnamed { 
             unnamed: unnamed_fields,..
-        }),..}) => handle_struct_encoding(unnamed_fields,name),
+        }),..}) => handle_struct_encoding(unnamed_fields,name,input.attrs),
         
         Data::Struct(DataStruct {fields: Fields::Named(FieldsNamed { 
             named:named_fields, .. 
-        }), .. }) => handle_struct_encoding(named_fields,name),
+        }), .. }) => handle_struct_encoding(named_fields,name,input.attrs),
 
         syn::Data::Enum(ve) => 
-            data_enum_encoding_handling(ve,name)
+            data_enum_encoding_handling(ve,name,input.attrs)
     }
 }
 
 
 
 
-#[proc_macro_derive(FromPlutusDataDerive,attributes(base_16,force_variant,repr_bool_as_num))]
+#[proc_macro_derive(FromPlutusDataDerive,attributes(base_16,force_variant,repr_bool_as_num,ignore_container))]
 pub fn from_plutus_data_macro(input: TokenStream) -> TokenStream {
 
     let input = parse_macro_input!(input as DeriveInput);
@@ -93,14 +93,14 @@ pub fn from_plutus_data_macro(input: TokenStream) -> TokenStream {
 
         Data::Struct(DataStruct {fields: Fields::Unnamed(FieldsUnnamed { 
             unnamed: unnamed_fields,..
-        }),..}) => handle_struct_decoding(unnamed_fields,name),
+        }),..}) => handle_struct_decoding(unnamed_fields,name,input.attrs),
         
         Data::Struct(DataStruct {fields: Fields::Named(FieldsNamed { 
             named:named_fields, .. 
-        }), .. }) => handle_struct_decoding(named_fields,name),
+        }), .. }) => handle_struct_decoding(named_fields,name,input.attrs),
 
         syn::Data::Enum(vf) => 
-            data_enum_decoding_handling(vf,name)
+            data_enum_decoding_handling(vf,name,input.attrs)
     }
 }
 

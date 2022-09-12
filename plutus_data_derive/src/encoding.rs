@@ -24,9 +24,10 @@ pub (crate) fn encode_field_value(field:&syn::Field,selfie:bool,attribs:&Vec<Str
 
 pub (crate) fn handle_struct_encoding(
     mut fields:syn::punctuated::Punctuated<syn::Field,syn::token::Comma>,
-    name:syn::Ident
+    name:syn::Ident,attributes:Vec<syn::Attribute>
 ) -> proc_macro::TokenStream {
-
+    let attributes = attributes.into_iter().map(|a| a.path.get_ident().unwrap().to_string() )
+                            .collect::<Vec<String>>();
     let alphabet = 
         (b'a'..=b'z')
         .map(|c| c as char)
@@ -54,14 +55,16 @@ pub (crate) fn handle_struct_encoding(
         };
 
         // todo: this is stupid.
-        let attribs = 
+        let mut attribs = 
             my_field.clone().attrs.into_iter()
                 .map(|a| a.path.get_ident().unwrap().to_string() )
                 .collect::<Vec<String>>();
-
+        for x in &attributes {
+            attribs.push(x.clone())
+        }
         let val_quote = encode_field_value(&my_field,field_idents.is_empty(),&attribs);
         encoder_field_handlers.push(quote!{
-            let vg : Result<cardano_multiplatform_lib::plutus::PlutusData,String> = {
+            let vg : Result<plutus_data::PlutusData,String> = {
                 #val_quote
             };
             items.add(&vg?);
@@ -76,21 +79,17 @@ pub (crate) fn handle_struct_encoding(
             quote! { let Self (#(#field_idents),*) = self;}
         };
     
-    //let (a , b) = (1,2);
-    
-
     let combo = quote! {
-        use cardano_multiplatform_lib::*;
+        use plutus_data::*;
         impl plutus_data::ToPlutusData for #name {
-            fn to_plutus_data(&self,attribs:&Vec<String>) -> Result<cardano_multiplatform_lib::plutus::PlutusData,String> {
+            fn to_plutus_data(&self,attribs:&Vec<String>) -> Result<plutus_data::PlutusData,String> {
                 #woop
-                let mut items = cardano_multiplatform_lib::plutus::PlutusList::new();
+                let mut items = plutus_data::PlutusList::new();
                 #(#encoder_field_handlers)*
-                let bzero = cardano_multiplatform_lib::ledger::common::value::BigNum::zero();
-                Ok( cardano_multiplatform_lib::plutus::PlutusData::new_constr_plutus_data(
-                        &cardano_multiplatform_lib::plutus::ConstrPlutusData::new(&bzero,&items)
+                let bzero = plutus_data::convert_to_big_num(&0);
+                Ok( plutus_data::PlutusData::new_constr_plutus_data(
+                        &plutus_data::ConstrPlutusData::new(&bzero,&items)
                 ) )
-                //Err(String::from("fake"))
             }
             
         }
@@ -98,24 +97,24 @@ pub (crate) fn handle_struct_encoding(
     TokenStream::from(combo)
 }
 
-pub (crate) fn data_enum_encoding_handling(v:syn::DataEnum,name:syn::Ident) -> proc_macro::TokenStream {
+pub (crate) fn data_enum_encoding_handling(v:syn::DataEnum,name:syn::Ident,attributes:Vec<syn::Attribute>) -> proc_macro::TokenStream {
     
     let variants = v.variants.into_iter();
     let mut encoder_variant_handlers = vec![];
-
+    let attributes = attributes.into_iter().map(|a| a.path.get_ident().unwrap().to_string() )
+                            .collect::<Vec<String>>();
     let alphabet = 
         (b'a'..=b'z')
         .map(|c| c as char)
         .filter(|c| c.is_alphabetic())
         .collect::<Vec<_>>();
 
-    let mut constructor_id = -1;
+    let mut constructor_id : i64 = -1;
 
     for ev in variants {
         constructor_id = constructor_id + 1;
         let variant_ident = ev.ident.clone();        
         let field_count = ev.fields.len();
-        let istring = constructor_id.clone().to_string();
         let is_forced = ev.attrs.into_iter().any(|a|format!("{:?}",a).contains("force_variant"));
         if is_forced {
             crate::info(&name,&format!("When encoding this type, we will only allow it to be of the specified variant '{}', and it will be packed as the inner data of the variant, ie. it will not be wrapped in constr data.",variant_ident.to_string()));
@@ -128,11 +127,11 @@ pub (crate) fn data_enum_encoding_handling(v:syn::DataEnum,name:syn::Ident) -> p
 
             encoder_variant_handlers.push(quote!{
                 #name::#variant_ident => {
-                    let my_constructor_id = #istring;
-                    let big_num = cardano_multiplatform_lib::ledger::common::value::BigNum::from_str(&my_constructor_id).unwrap();
-                    let items = cardano_multiplatform_lib::plutus::PlutusList::new();
-                    let item = cardano_multiplatform_lib::plutus::ConstrPlutusData::new(&big_num,&items);
-                    Ok(cardano_multiplatform_lib::plutus::PlutusData::new_constr_plutus_data(&item))
+                    let my_constructor_id = #constructor_id;
+                    let big_num = plutus_data::convert_to_big_num(&my_constructor_id);
+                    let items = plutus_data::PlutusList::new();
+                    let item = plutus_data::ConstrPlutusData::new(&big_num,&items);
+                    Ok(plutus_data::PlutusData::new_constr_plutus_data(&item))
                 }
             });
 
@@ -155,10 +154,14 @@ pub (crate) fn data_enum_encoding_handling(v:syn::DataEnum,name:syn::Ident) -> p
         let mut named = false;
         for ii in 0..field_count {
             let field = field_iter.next().unwrap();
-            let attribs = 
+            let mut attribs = 
                 field.clone().attrs.into_iter()
                     .map(|a| a.path.get_ident().unwrap().to_string() )
                     .collect::<Vec<String>>();
+
+            for x in &attributes {
+                attribs.push(x.clone());
+            }
             match &field.clone().ident {
                 Some(ff) => {
                     named = true;
@@ -186,7 +189,7 @@ pub (crate) fn data_enum_encoding_handling(v:syn::DataEnum,name:syn::Ident) -> p
                             
                     let val_quote = encode_field_value(&named_field_for_an_ident,false,&attribs);
                     encoder_field_handlers.push(quote!{
-                        let v : Result<cardano_multiplatform_lib::plutus::PlutusData,String> = {
+                        let v : Result<plutus_data::PlutusData,String> = {
                             #val_quote
                         };
                         items.add(&v?);
@@ -207,7 +210,7 @@ pub (crate) fn data_enum_encoding_handling(v:syn::DataEnum,name:syn::Ident) -> p
                     
                     let val_quote = encode_field_value(&field_ident_field,false,&attribs);
                     encoder_field_handlers.push(quote!{
-                        let v : Result<cardano_multiplatform_lib::plutus::PlutusData,String> = {
+                        let v : Result<plutus_data::PlutusData,String> = {
                             #val_quote
                         };
                         items.add(&v?);
@@ -228,7 +231,7 @@ pub (crate) fn data_enum_encoding_handling(v:syn::DataEnum,name:syn::Ident) -> p
             if field_count == 1 {
                 encoder_variant_handlers.push(quote!{
                     #name::#variant_ident #varfieldrefs => {
-                        let mut items = cardano_multiplatform_lib::plutus::PlutusList::new();
+                        let mut items = plutus_data::PlutusList::new();
                         #(#encoder_field_handlers);*
                         let result = items.get(0);
                         Ok(result)
@@ -237,12 +240,12 @@ pub (crate) fn data_enum_encoding_handling(v:syn::DataEnum,name:syn::Ident) -> p
             } else {
                 encoder_variant_handlers.push(quote!{
                     #name::#variant_ident #varfieldrefs => {
-                        let my_constructor_id = #istring;
-                        let big_num = cardano_multiplatform_lib::ledger::common::value::BigNum::from_str(&my_constructor_id).unwrap();
-                        let mut items = cardano_multiplatform_lib::plutus::PlutusList::new();
+                        let my_constructor_id = #constructor_id;
+                        let big_num = plutus_data::convert_to_big_num(&my_constructor_id);
+                        let mut items = plutus_data::PlutusList::new();
                         #(#encoder_field_handlers);*
-                        let item = cardano_multiplatform_lib::plutus::ConstrPlutusData::new(&big_num,&items);
-                        Ok(cardano_multiplatform_lib::plutus::PlutusData::new_constr_plutus_data(&item))
+                        let item = plutus_data::ConstrPlutusData::new(&big_num,&items);
+                        Ok(plutus_data::PlutusData::new_constr_plutus_data(&item))
                     }
                 });
             }
@@ -250,12 +253,12 @@ pub (crate) fn data_enum_encoding_handling(v:syn::DataEnum,name:syn::Ident) -> p
                 
             encoder_variant_handlers.push(quote!{
                 #name::#variant_ident #varfieldrefs => {
-                    let my_constructor_id = #istring;
-                    let big_num = cardano_multiplatform_lib::ledger::common::value::BigNum::from_str(&my_constructor_id).unwrap();
-                    let mut items = cardano_multiplatform_lib::plutus::PlutusList::new();
+                    let my_constructor_id = #constructor_id;
+                    let big_num = plutus_data::convert_to_big_num(&my_constructor_id);
+                    let mut items = plutus_data::PlutusList::new();
                     #(#encoder_field_handlers);*
-                    let item = cardano_multiplatform_lib::plutus::ConstrPlutusData::new(&big_num,&items);
-                    Ok(cardano_multiplatform_lib::plutus::PlutusData::new_constr_plutus_data(&item))
+                    let item = plutus_data::ConstrPlutusData::new(&big_num,&items);
+                    Ok(plutus_data::PlutusData::new_constr_plutus_data(&item))
                 }
             });
         }
@@ -274,8 +277,7 @@ pub (crate) fn data_enum_encoding_handling(v:syn::DataEnum,name:syn::Ident) -> p
 
     let combo = quote! {
         impl plutus_data::ToPlutusData for #name {
-        //impl #name {
-            fn to_plutus_data(&self,attribs:&Vec<String>) -> Result<cardano_multiplatform_lib::plutus::PlutusData,String> {
+            fn to_plutus_data(&self,attribs:&Vec<String>) -> Result<plutus_data::PlutusData,String> {
                 match self {
                     #(#encoder_variant_handlers),*
                 }

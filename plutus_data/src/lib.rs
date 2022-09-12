@@ -4,14 +4,16 @@
 
 use std::collections::HashMap;
 
-use cardano_multiplatform_lib::ledger::common::value::BigInt;
-use cardano_multiplatform_lib::ledger::common::value::BigNum;
-use cardano_multiplatform_lib::plutus::ConstrPlutusData;
-use cardano_multiplatform_lib::plutus::PlutusData;
-use cardano_multiplatform_lib::plutus::PlutusList;
+pub use cardano_multiplatform_lib::ledger::common::value::BigInt as BigInt;
+pub use cardano_multiplatform_lib::ledger::common::value::BigNum as BigNum;
+pub use cardano_multiplatform_lib::plutus::ConstrPlutusData as ConstrPlutusData;
+pub use cardano_multiplatform_lib::plutus::PlutusData as PlutusData;
+pub use cardano_multiplatform_lib::plutus::PlutusList as PlutusList;
+pub use cardano_multiplatform_lib::plutus::PlutusMap as PlutusMap;
 pub use plutus_data_derive::FromPlutusDataDerive;
 pub use plutus_data_derive::ToPlutusDataDerive;
-
+pub use cardano_multiplatform_lib::ledger::common::value::from_bignum as from_bignum;
+pub use cardano_multiplatform_lib::ledger::common::value::to_bignum as to_bignum;
 
 pub trait ToPlutusData {
     fn to_plutus_data(&self,attributes:&Vec<String>) -> Result<PlutusData,String>;
@@ -58,37 +60,29 @@ impl<T1,T2> ToPlutusData for (T1,T2) where T1: ToPlutusData , T2: ToPlutusData {
     fn to_plutus_data(&self,attribs:&Vec<String>) -> Result<PlutusData,String> {
         let k = self.0.to_plutus_data(&attribs)?;
         let v = self.1.to_plutus_data(&attribs)?;
-        let mut pl = cardano_multiplatform_lib::plutus::PlutusList::new();
+        let mut pl = crate::PlutusList::new();
         pl.add(&k);
         pl.add(&v);
-        let cs = cardano_multiplatform_lib::plutus::ConstrPlutusData::new(
-            &cardano_multiplatform_lib::ledger::common::value::BigNum::zero(), &pl);
-        Ok(cardano_multiplatform_lib::plutus::PlutusData::new_constr_plutus_data(&cs))
+        let cs = crate::ConstrPlutusData::new(
+            &crate::BigNum::zero(), &pl);
+        Ok(crate::PlutusData::new_constr_plutus_data(&cs))
     }
 }
 
 
 impl<K : ToPlutusData + Clone,V : ToPlutusData + Clone> ToPlutusData for HashMap<K,V> {
     fn to_plutus_data(&self,attribs:&Vec<String>) -> Result<PlutusData,String> {
-        let mut map = cardano_multiplatform_lib::plutus::PlutusMap::new();
+        let mut map = PlutusMap::new();
         for kvp in self.iter() {
             let encoded_k = kvp.0.clone().to_plutus_data(&attribs);
             let encoded_v = kvp.1.clone().to_plutus_data(&attribs);
             map.insert(&encoded_k?,&encoded_v?);
         }
-        Ok(cardano_multiplatform_lib::plutus::PlutusData::new_map(&map))
+        Ok(PlutusData::new_map(&map))
     }
 }
 
-impl<T : FromPlutusData<T>> FromPlutusData<Option<T>> for Option<T> {
-    fn from_plutus_data(x:PlutusData,attribs:&Vec<String>) -> Result<Option<T>,String> {
-        let result = T::from_plutus_data(x,attribs);
-        match result {
-            Ok(v) => Ok(Some(v)),
-            Err(e) => Err(format!("Failed to unpack option value from plutus data! Error: {}",e))
-        }
-    }
-}
+
 
 impl<T : FromPlutusData<T>> FromPlutusData<Box<T>> for Box<T> {
     fn from_plutus_data(x:PlutusData,attribs:&Vec<String>) -> Result<Box<T>,String> {
@@ -102,13 +96,13 @@ impl<T : FromPlutusData<T>> FromPlutusData<Box<T>> for Box<T> {
 
 impl<T : ToPlutusData> ToPlutusData for Vec<T> {
     fn to_plutus_data(&self,attribs:&Vec<String>) -> Result<PlutusData,String> {
-        let mut vec_items = cardano_multiplatform_lib::plutus::PlutusList::new();
+        let mut vec_items = PlutusList::new();
         for yyy in self {
             let vx = yyy.to_plutus_data(&attribs);
             vec_items.add(&vx?);
         }
         Ok(
-            cardano_multiplatform_lib::plutus::PlutusData::new_list(&vec_items)
+            PlutusData::new_list(&vec_items)
         )
     }
 }
@@ -142,7 +136,7 @@ impl<T : FromPlutusData<T>> FromPlutusData<Vec<T>> for Vec<T> {
                 for xi in 0 .. pl.len() {
                     match T::from_plutus_data(pl.get(xi),attribs) {
                         Ok(v) => { result.push(v) },
-                        Err(e) => return Err(format!("when decoding a vector, we got this exception: {}",e))
+                        Err(e) => return Err(format!("when decoding a vector, we got this error: {}",e))
                     } 
                 }
                 Ok(result)
@@ -176,30 +170,84 @@ impl ToPlutusData for String {
         let bytes = String::as_bytes(self).to_vec();
         if b16 {
             match hex::decode(bytes) {
-                Ok(hex_bytes) => Ok(cardano_multiplatform_lib::plutus::PlutusData::new_bytes(hex_bytes)),
+                Ok(hex_bytes) => Ok(PlutusData::new_bytes(hex_bytes)),
                 Err(e) => Err(format!("{:?}",e))
             }
         } else {
-            Ok(cardano_multiplatform_lib::plutus::PlutusData::new_bytes(bytes))
+            Ok(PlutusData::new_bytes(bytes))
         }
     }
 }
 
 impl<T: ToPlutusData> ToPlutusData for &Option<T> {
     fn to_plutus_data(&self,attribs:&Vec<String>) -> Result<PlutusData,String> {
+        let ignore_container : bool = attribs.iter().any(|a|a.to_lowercase() == "ignore_container");
         match self {
-            Some(v) => v.to_plutus_data(&attribs),
-            None => Err(String::from("Not possible to encode None to plutus data.")),
+            None if ignore_container => Err(String::from("Not possible to encode &None to plutus data when using attribute 'ignore_container'.")),
+            Some(v) if ignore_container => v.to_plutus_data(&attribs),
+            None  => Ok(empty_constr(1)),            
+            Some(v)  => {
+                Ok(
+                    wrap_with_constr(
+                        0, 
+                        v.to_plutus_data(attribs)?
+                    )
+                )
+            }
         }
     }
 }
 
+pub struct ByteVec(Vec<u8>);
+
+impl ToPlutusData for ByteVec {
+    fn to_plutus_data(&self,_attributes:&Vec<String>) -> Result<PlutusData,String> {
+        Ok(crate::PlutusData::new_bytes(self.0.clone()))
+    }
+}
+
+impl<T : FromPlutusData<T>> FromPlutusData<Option<T>> for Option<T> {
+    fn from_plutus_data(x:PlutusData,attribs:&Vec<String>) -> Result<Option<T>,String> {
+        let ignore_container : bool = attribs.iter().any(|a|a.to_lowercase() == "ignore_container");
+        
+        if ignore_container {
+            let result = T::from_plutus_data(x,attribs);
+            return match result {
+                Ok(v) => Ok(Some(v)),
+                Err(e) => Err(format!("Failed to unpack (ignore_container_marked) option value from plutus data! Error: {}",e))
+            }
+        } else {
+            return match x.as_constr_plutus_data() {
+                Some(c) => {
+                    match (c.alternative().to_str().as_ref(),c.data().len()) {
+                        ("0",1) => {
+                            Ok(Some(T::from_plutus_data(c.data().get(0),attribs)?))
+                        },
+                        ("1",0) => Ok(None),
+                        _ => {
+                            Err(String::from("failed to unpack option value. not valid const representation."))
+                        }
+                    }
+                },
+                None => Err(format!("failed to decode option value form plutus data... expected constr, found: {:?}",x.kind())),
+            }
+        }
+    }
+}
 
 impl<T: ToPlutusData> ToPlutusData for Option<T> {
     fn to_plutus_data(&self,attribs:&Vec<String>) -> Result<PlutusData,String> {
+        let ignore_container : bool = attribs.iter().any(|a|a.to_lowercase() == "ignore_container");
         match self {
-            Some(v) => v.to_plutus_data(&attribs),
-            None => Err(String::from("Not possible to encode None to plutus data.")),
+            None if ignore_container => Err(String::from("Not possible to encode None to plutus data when using attribute 'ignore_container'.")),
+            Some(v) if ignore_container => v.to_plutus_data(&attribs),
+            None  => Ok(empty_constr(1)),            
+            Some(v)  => Ok(
+                wrap_with_constr(
+                    0, 
+                    v.to_plutus_data(attribs)?
+                )
+            )
         }
     }
 }
@@ -293,6 +341,12 @@ ImplPlutusForNum!(@u64);
 ImplPlutusForNum!(@u128);
 ImplPlutusForNum!(@usize);
 
+
+pub fn convert_to_big_int(i:&i64) -> BigInt { BigInt::from(i.clone()) }
+pub fn convert_to_big_num(i:&i64) -> BigNum { BigNum::from(i.clone() as u64) }
+pub fn convert_u64_to_big_int(i:&u64) -> BigInt { BigInt::from(i.clone()) }
+pub fn convert_u64_to_big_num(i:&u64) -> BigNum { BigNum::from(i.clone()) }
+
 mod macros {
     #[macro_export]
     #[doc(hidden)]
@@ -300,16 +354,16 @@ mod macros {
         (@$T:ident) => {
             impl ToPlutusData for $T {
                 fn to_plutus_data(&self,_attribs:&Vec<String>) -> Result<PlutusData,String> {
-                    match cardano_multiplatform_lib::ledger::common::value::BigInt::from_str(&self.to_string()) {
-                        Ok(n) => Ok(cardano_multiplatform_lib::plutus::PlutusData::new_integer(&n)),
+                    match BigInt::from_str(&self.to_string()) {
+                        Ok(n) => Ok(PlutusData::new_integer(&n)),
                         Err(_) => Err(format!("failed to parse {} to BigInt.",self)),
                     }
                 }
             }
             impl ToPlutusData for &$T {
                 fn to_plutus_data(&self,_attribs:&Vec<String>) -> Result<PlutusData,String> {
-                    match cardano_multiplatform_lib::ledger::common::value::BigInt::from_str(&self.to_string()) {
-                        Ok(n) => Ok(cardano_multiplatform_lib::plutus::PlutusData::new_integer(&n)),
+                    match BigInt::from_str(&self.to_string()) {
+                        Ok(n) => Ok(PlutusData::new_integer(&n)),
                         Err(_) => Err(format!("failed to parse {} to BigInt.",self)),
                     }
                 }
@@ -329,4 +383,21 @@ mod macros {
             }
         }
     }
+}
+
+fn empty_constr(tag: u64) -> PlutusData {
+    let tag_num : BigNum = tag.into();
+    let list = PlutusList::new();
+    PlutusData::new_constr_plutus_data(
+        &ConstrPlutusData::new(&tag_num, &list)
+    )
+}
+
+fn wrap_with_constr(tag: u64, data: PlutusData) -> PlutusData {
+    let tag_num : BigNum = tag.into();
+    let mut list = PlutusList::new();
+    list.add(&data);
+    PlutusData::new_constr_plutus_data(
+        &ConstrPlutusData::new(&tag_num, &list)
+    )
 }

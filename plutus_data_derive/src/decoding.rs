@@ -1,11 +1,13 @@
 pub (crate) fn decode_field_value(ty:&syn::Type,attribs:&Vec<String>) -> syn::__private::TokenStream2 {
-    quote!{|p:cardano_multiplatform_lib::plutus::PlutusData| -> Result<#ty,String> {
-        let attributes : Vec<String> = vec![#(String::from(#attribs)),*];
+    
+    quote!{|p:plutus_data::PlutusData| -> Result<#ty,String> {
+        let mut attributes : Vec<String> = vec![#(String::from(#attribs)),*];
         <#ty>::from_plutus_data(p,&attributes)
     }}}
 
-pub (crate) fn handle_struct_decoding(mut fields:syn::punctuated::Punctuated<syn::Field,syn::token::Comma>,name:syn::Ident) -> proc_macro::TokenStream {
+pub (crate) fn handle_struct_decoding(mut fields:syn::punctuated::Punctuated<syn::Field,syn::token::Comma>,name:syn::Ident,attributes:Vec<syn::Attribute>) -> proc_macro::TokenStream {
     
+    let name_string = name.to_string();
     let field_count = fields.len();
     if field_count == 0 {
         panic!("Cannot create decoder for structs with no fields. {:?}",name.to_string())
@@ -13,12 +15,14 @@ pub (crate) fn handle_struct_decoding(mut fields:syn::punctuated::Punctuated<syn
 
     let use_unnamed = fields.first().unwrap().ident.is_none();
     let mut extracted_values : Vec<_> = vec![];
-
+    let struct_attribs = attributes.into_iter().map(|a| a.path.get_ident().unwrap().to_string() )
+        .collect::<Vec<String>>();
+    
     for (i,f) in fields.iter_mut().enumerate() {
         let field_attr_iter = f.clone().attrs.into_iter().map(|a| a.path.get_ident().unwrap().to_string() );
         
-        let attribs = field_attr_iter.clone().collect::<Vec<String>>();
-
+        let mut attribs = field_attr_iter.clone().collect::<Vec<String>>();
+        for x in struct_attribs.iter() {attribs.push(x.to_owned())};
         let getter = decode_field_value(&f.ty,&attribs);
         extracted_values.push(match &f.ident {
             Some(fident) => quote! { #fident : (#getter)(items.get(#i))? },
@@ -33,7 +37,7 @@ pub (crate) fn handle_struct_decoding(mut fields:syn::punctuated::Punctuated<syn
             if use_unnamed {
                 quote!{ 
                     {if ilen < #field_count {
-                        return Err(format!("Invalid number of items in the plutus data. Found: {} , Expected: {}",ilen,#field_count))
+                        return Err(format!("Invalid number of (unnamed) items in the plutus data. Found: {} , Expected: {}.. ",ilen,#field_count))
                     } else {
                         #name(#(#extracted_values),*) 
                     }}
@@ -41,7 +45,7 @@ pub (crate) fn handle_struct_decoding(mut fields:syn::punctuated::Punctuated<syn
             } else {
                 quote!{  
                     {if ilen < #field_count {
-                        return Err(format!("Invalid number of items in the plutus data. Found: {} , Expected: {}",ilen,#field_count))
+                        return Err(format!("Invalid number of items in the plutus data. Found: {} , Expected: {}..",ilen,#field_count))
                     } else {
                         #name { #(#extracted_values),* }
                     }}
@@ -53,7 +57,8 @@ pub (crate) fn handle_struct_decoding(mut fields:syn::punctuated::Punctuated<syn
     
     let result = quote!{
         impl plutus_data::FromPlutusData<#name> for #name {
-            fn from_plutus_data(x:cardano_multiplatform_lib::plutus::PlutusData,attribs:&Vec<String>) -> Result<#name,String> {
+            fn from_plutus_data(x:plutus_data::PlutusData,attribs:&Vec<String>) -> Result<#name,String> {
+                let name_str = #name_string;
                 match x.as_constr_plutus_data() {
                     Some(mut cc) => {
                         let items = cc.data();
@@ -73,10 +78,11 @@ pub (crate) fn handle_struct_decoding(mut fields:syn::punctuated::Punctuated<syn
 
 
 
-pub (crate) fn data_enum_decoding_handling(v:syn::DataEnum,name:syn::Ident) -> proc_macro::TokenStream {
-
+pub (crate) fn data_enum_decoding_handling(v:syn::DataEnum,name:syn::Ident,attributes:Vec<syn::Attribute>) -> proc_macro::TokenStream {
+    let name_string = name.to_string();
     let mut constructor_cases = vec![];
-    
+    let enum_attribs = attributes.into_iter().map(|a| a.path.get_ident().unwrap().to_string() )
+        .collect::<Vec<String>>();
     for (i,v) in v.variants.iter().enumerate() {
         
         let u64i = i as u64;
@@ -99,13 +105,19 @@ pub (crate) fn data_enum_decoding_handling(v:syn::DataEnum,name:syn::Ident) -> p
         
         let mut extracted_values : Vec<_> = vec![];
 
+        let variant_attribs = v.clone().attrs.into_iter()
+            .map(|a| a.path.get_ident().unwrap().to_string() )
+            .collect::<Vec<String>>();
+
         for (ii,f) in cloned_fields.iter_mut().enumerate() {
 
-            let attribs = 
+            let mut attribs = 
                 f.clone().attrs.into_iter()
                         .map(|a| a.path.get_ident().unwrap().to_string() )
                         .collect::<Vec<String>>();
-
+            
+            for x in variant_attribs.iter() {attribs.push(x.to_owned())};
+            for x in enum_attribs.clone() {attribs.push(x)};
             let getter = decode_field_value(&f.ty,&attribs);
 
             if is_forced {
@@ -135,7 +147,8 @@ pub (crate) fn data_enum_decoding_handling(v:syn::DataEnum,name:syn::Ident) -> p
         if is_forced {
             return proc_macro::TokenStream::from(quote! {
                 impl plutus_data::FromPlutusData<#name> for #name {
-                    fn from_plutus_data(selfie:cardano_multiplatform_lib::plutus::PlutusData,attribs:&Vec<String>) -> Result<#name,String> {
+                    fn from_plutus_data(selfie:plutus_data::PlutusData,attribs:&Vec<String>) -> Result<#name,String> {
+                        let name_str = #name_string;
                         #variant_constructor
                     }
                 }
@@ -146,17 +159,17 @@ pub (crate) fn data_enum_decoding_handling(v:syn::DataEnum,name:syn::Ident) -> p
 
     };
 
-    let name_str = name.to_string();
+    let name_string = name.to_string();
 
     proc_macro::TokenStream::from(quote!{
-        use cardano_multiplatform_lib::*;
+        use plutus_data::*;
         impl plutus_data::FromPlutusData<#name> for #name {
-        //impl #name {
-            fn from_plutus_data(x:cardano_multiplatform_lib::plutus::PlutusData,attribs:&Vec<String>) -> Result<#name,String> {
+            fn from_plutus_data(x:plutus_data::PlutusData,attribs:&Vec<String>) -> Result<#name,String> {
+                let name_str = #name_string;
                 match x.as_constr_plutus_data() {
                     Some(c) => {
                         let constructor = c.alternative();
-                        let constructor_u64 = cardano_multiplatform_lib::ledger::common::value::from_bignum(&constructor);
+                        let constructor_u64 = plutus_data::from_bignum(&constructor);
                         let mut items = c.data();
                         let result = match constructor_u64 {
                             #(#constructor_cases),*
@@ -164,7 +177,7 @@ pub (crate) fn data_enum_decoding_handling(v:syn::DataEnum,name:syn::Ident) -> p
                         };
                         result
                     },
-                    None => Err(format!("This is not a valid constr data item.. cannot decode into enum.. actual type: {:?}.. ::{:?}::",x.kind(),#name_str))
+                    None => Err(format!("This is not a valid constr data item.. cannot decode into enum.. actual type: {:?}.. ::{:?}::",x.kind(),name_str))
                 }
             }
         }
