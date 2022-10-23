@@ -1,6 +1,6 @@
 [package]
 name = "plutus_data"
-version = "0.0.3"
+version = "0.0.4"
 edition = "2021"
 authors = ["Olof Blomqvist <olof@twnet.se>"]
 description = "derive macros for converting between rust data types and plutus-data"
@@ -8,8 +8,10 @@ repository = "https://github.com/OlofBlomqvist/plutus_data"
 license-file = "licence"
 
 [dependencies]
-plutus_data_derive = "0.0.3"
+plutus_data_derive = "0.0.4"
 #plutus_data_derive = { path = "../plutus_data_derive" }
-cardano-multiplatform-lib = { version = "3.0.0" }
-hex = "0.4.3"
+cardano-multiplatform-lib = "3.1.0"
+hex = "^0.4.3"
+
+
 

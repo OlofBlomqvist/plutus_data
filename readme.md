@@ -22,7 +22,7 @@ pub struct ExampleStruct {
     // normally option values will be represented as constr 0 [value] (Some), or constr 1 [] (None).
     // using ignore container, they will not be wrapped inside constr. this also means that
     // you cannot encode None values when using that attribute.
-    #[attr(ignore_container)]
+    #[attr(ignore_option_container)]
     pub opt_test2 : Option<String>
     
 }

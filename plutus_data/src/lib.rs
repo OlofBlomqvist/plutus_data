@@ -1,25 +1,38 @@
 #![feature(box_into_inner)]
 
-//extern crate plutus_data_derive;
+
+// TODO - Make it so that we don't work directly with plutus data structs from some lib
+// but just the
+
 
 use std::collections::HashMap;
 
-pub use cardano_multiplatform_lib::ledger::common::value::BigInt as BigInt;
-pub use cardano_multiplatform_lib::ledger::common::value::BigNum as BigNum;
-pub use cardano_multiplatform_lib::plutus::ConstrPlutusData as ConstrPlutusData;
-pub use cardano_multiplatform_lib::plutus::PlutusData as PlutusData;
-pub use cardano_multiplatform_lib::plutus::PlutusList as PlutusList;
-pub use cardano_multiplatform_lib::plutus::PlutusMap as PlutusMap;
+
+pub use cardano_multiplatform_lib::plutus::ConstrPlutusData;
+pub use cardano_multiplatform_lib::plutus::PlutusData;
+pub use cardano_multiplatform_lib::plutus::PlutusList;
+pub use cardano_multiplatform_lib::plutus::PlutusMap;
+pub use cardano_multiplatform_lib::ledger::common::value::to_bignum;
+pub use cardano_multiplatform_lib::ledger::common::value::from_bignum;
+// use cardano_serialization_lib::utils::BigInt;
+// use cardano_serialization_lib::utils::BigNum;
+// use cardano_serialization_lib::utils::to_bignum;
+use cardano_multiplatform_lib::ledger::common::value::BigInt;
+use cardano_multiplatform_lib::ledger::common::value::BigNum;
+
+
+
 pub use plutus_data_derive::FromPlutusDataDerive;
 pub use plutus_data_derive::ToPlutusDataDerive;
-pub use cardano_multiplatform_lib::ledger::common::value::from_bignum as from_bignum;
-pub use cardano_multiplatform_lib::ledger::common::value::to_bignum as to_bignum;
+
+
 
 pub trait ToPlutusData {
     fn to_plutus_data(&self,attributes:&Vec<String>) -> Result<PlutusData,String>;
 }
 
 pub trait FromPlutusData<T> {
+    
     fn from_plutus_data(x:PlutusData,attributes:&Vec<String>) -> Result<T,String>;
 }
 
@@ -60,12 +73,12 @@ impl<T1,T2> ToPlutusData for (T1,T2) where T1: ToPlutusData , T2: ToPlutusData {
     fn to_plutus_data(&self,attribs:&Vec<String>) -> Result<PlutusData,String> {
         let k = self.0.to_plutus_data(&attribs)?;
         let v = self.1.to_plutus_data(&attribs)?;
-        let mut pl = crate::PlutusList::new();
+        let mut pl = PlutusList::new();
         pl.add(&k);
         pl.add(&v);
-        let cs = crate::ConstrPlutusData::new(
-            &crate::BigNum::zero(), &pl);
-        Ok(crate::PlutusData::new_constr_plutus_data(&cs))
+        let cs = ConstrPlutusData::new(
+            &BigNum::zero(), &pl);
+        Ok(PlutusData::new_constr_plutus_data(&cs))
     }
 }
 
@@ -149,6 +162,7 @@ impl<T : FromPlutusData<T>> FromPlutusData<Vec<T>> for Vec<T> {
 impl FromPlutusData<String> for String {
     fn from_plutus_data(x:PlutusData,attribs:&Vec<String>) -> Result<String,String> {
         let b16 : bool = attribs.iter().any(|a|a.to_lowercase() == "base_16");
+        
         match x.as_bytes() {
             Some(bytes) if b16 => {
                 Ok(hex::encode(bytes))
@@ -181,10 +195,10 @@ impl ToPlutusData for String {
 
 impl<T: ToPlutusData> ToPlutusData for &Option<T> {
     fn to_plutus_data(&self,attribs:&Vec<String>) -> Result<PlutusData,String> {
-        let ignore_container : bool = attribs.iter().any(|a|a.to_lowercase() == "ignore_container");
+        let ignore_option_container : bool = attribs.iter().any(|a|a.to_lowercase() == "ignore_option_container");
         match self {
-            None if ignore_container => Err(String::from("Not possible to encode &None to plutus data when using attribute 'ignore_container'.")),
-            Some(v) if ignore_container => v.to_plutus_data(&attribs),
+            None if ignore_option_container => Err(String::from("Not possible to encode &None to plutus data when using attribute 'ignore_option_container'.")),
+            Some(v) if ignore_option_container => v.to_plutus_data(&attribs),
             None  => Ok(empty_constr(1)),            
             Some(v)  => {
                 Ok(
@@ -202,26 +216,26 @@ pub struct ByteVec(Vec<u8>);
 
 impl ToPlutusData for ByteVec {
     fn to_plutus_data(&self,_attributes:&Vec<String>) -> Result<PlutusData,String> {
-        Ok(crate::PlutusData::new_bytes(self.0.clone()))
+        Ok(PlutusData::new_bytes(self.0.clone()))
     }
 }
 
 impl<T : FromPlutusData<T>> FromPlutusData<Option<T>> for Option<T> {
     fn from_plutus_data(x:PlutusData,attribs:&Vec<String>) -> Result<Option<T>,String> {
-        let ignore_container : bool = attribs.iter().any(|a|a.to_lowercase() == "ignore_container");
+        let ignore_option_container : bool = attribs.iter().any(|a|a.to_lowercase() == "ignore_option_container");
         
-        if ignore_container {
-            let result = T::from_plutus_data(x,attribs);
+        if ignore_option_container {
+            let result = T::from_plutus_data(x,&attribs);
             return match result {
                 Ok(v) => Ok(Some(v)),
-                Err(e) => Err(format!("Failed to unpack (ignore_container_marked) option value from plutus data! Error: {}",e))
+                Err(e) => Err(format!("Failed to unpack (ignore_option_container) option value from plutus data! Error: {}",e))
             }
         } else {
             return match x.as_constr_plutus_data() {
                 Some(c) => {
                     match (c.alternative().to_str().as_ref(),c.data().len()) {
                         ("0",1) => {
-                            Ok(Some(T::from_plutus_data(c.data().get(0),attribs)?))
+                            Ok(Some(T::from_plutus_data(c.data().get(0),&attribs)?))
                         },
                         ("1",0) => Ok(None),
                         _ => {
@@ -237,17 +251,23 @@ impl<T : FromPlutusData<T>> FromPlutusData<Option<T>> for Option<T> {
 
 impl<T: ToPlutusData> ToPlutusData for Option<T> {
     fn to_plutus_data(&self,attribs:&Vec<String>) -> Result<PlutusData,String> {
-        let ignore_container : bool = attribs.iter().any(|a|a.to_lowercase() == "ignore_container");
+        let ignore_option_container : bool = attribs.iter().any(|a|a.to_lowercase() == "ignore_option_container");
         match self {
-            None if ignore_container => Err(String::from("Not possible to encode None to plutus data when using attribute 'ignore_container'.")),
-            Some(v) if ignore_container => v.to_plutus_data(&attribs),
+            None if ignore_option_container => Err(String::from("Not possible to encode None to plutus data when using attribute 'ignore_option_container'.")),
+            Some(v) if ignore_option_container => {
+                //println!("Encoding without an option container.");
+                v.to_plutus_data(&attribs)
+            },
             None  => Ok(empty_constr(1)),            
-            Some(v)  => Ok(
-                wrap_with_constr(
-                    0, 
-                    v.to_plutus_data(attribs)?
+            Some(v)  => {
+                //println!("Wrapping an item inside of an option constr 0: {:?}",attribs);
+                Ok(
+                    wrap_with_constr(
+                        0, 
+                        v.to_plutus_data(&attribs)?
+                    )
                 )
-            )
+            }
         }
     }
 }
@@ -310,7 +330,7 @@ impl ToPlutusData for bool {
             true => Ok(
                 PlutusData::new_constr_plutus_data(
                     &ConstrPlutusData::new(
-                        &BigNum::from(1),
+                        &to_bignum(1),
                         &PlutusList::new()
                     )
                 )
@@ -318,7 +338,7 @@ impl ToPlutusData for bool {
             false => Ok(
                 PlutusData::new_constr_plutus_data(
                     &ConstrPlutusData::new(
-                        &BigNum::from(0),
+                        &to_bignum(0),
                         &PlutusList::new()
                     )
                 )

@@ -1,6 +1,6 @@
 [package]
 name = "plutus_data_derive"
-version = "0.0.3"
+version = "0.0.4"
 edition = "2021"
 authors = ["Olof Blomqvist <olof@twnet.se>"]
 repository = "https://github.com/OlofBlomqvist/plutus_data"
@@ -8,11 +8,11 @@ description = "you probably want to reference the plutus_data crate and not this
 license-file = "licence"
 
 [dependencies]
-syn = { version="1.0.99", features=["parsing"] }
-quote = "1.0.21"
-cardano-multiplatform-lib = { version = "3.0.0" }
-static_assertions = "1.1.0"
-hex = "0.4.3"
+syn = { version="^1.0.99", features=["parsing"] }
+quote = "^1.0.21"
+static_assertions = "^1.1.0"
+hex = "^0.4.3"
+
 
 [lib]
 proc-macro = true

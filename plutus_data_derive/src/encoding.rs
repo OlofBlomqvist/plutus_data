@@ -59,9 +59,11 @@ pub (crate) fn handle_struct_encoding(
             my_field.clone().attrs.into_iter()
                 .map(|a| a.path.get_ident().unwrap().to_string() )
                 .collect::<Vec<String>>();
+
         for x in &attributes {
             attribs.push(x.clone())
         }
+
         let val_quote = encode_field_value(&my_field,field_idents.is_empty(),&attribs);
         encoder_field_handlers.push(quote!{
             let vg : Result<plutus_data::PlutusData,String> = {
@@ -112,13 +114,19 @@ pub (crate) fn data_enum_encoding_handling(v:syn::DataEnum,name:syn::Ident,attri
     let mut constructor_id : i64 = -1;
 
     for ev in variants {
+
         constructor_id = constructor_id + 1;
         let variant_ident = ev.ident.clone();        
         let field_count = ev.fields.len();
-        let is_forced = ev.attrs.into_iter().any(|a|format!("{:?}",a).contains("force_variant"));
+        let variant_attribs = ev.clone().attrs.into_iter()
+            .map(|a| a.path.get_ident().unwrap().to_string() )
+            .collect::<Vec<String>>();
+        let is_forced = ev.clone().attrs.into_iter().any(|a|format!("{:?}",a.path.get_ident().unwrap().to_string()).contains("force_variant"));
+       
         if is_forced {
-            crate::info(&name,&format!("When encoding this type, we will only allow it to be of the specified variant '{}', and it will be packed as the inner data of the variant, ie. it will not be wrapped in constr data.",variant_ident.to_string()));
+            crate::info(&variant_ident,&format!("When encoding this type, we will only allow it to be of the specified variant '{}', and it will be packed as the inner data of the variant, ie. it will not be wrapped in constr data.",variant_ident.to_string()));
         }
+
         if field_count == 0 {
 
             if is_forced {
@@ -152,16 +160,24 @@ pub (crate) fn data_enum_encoding_handling(v:syn::DataEnum,name:syn::Ident,attri
         let mut encoder_field_handlers = vec![];
         let mut field_iter = ev.fields.iter();
         let mut named = false;
+
         for ii in 0..field_count {
+
             let field = field_iter.next().unwrap();
+            
             let mut attribs = 
                 field.clone().attrs.into_iter()
                     .map(|a| a.path.get_ident().unwrap().to_string() )
                     .collect::<Vec<String>>();
-
+            
             for x in &attributes {
                 attribs.push(x.clone());
             }
+
+            for x in &variant_attribs {
+                attribs.push(x.clone());
+            }
+
             match &field.clone().ident {
                 Some(ff) => {
                     named = true;
@@ -218,6 +234,7 @@ pub (crate) fn data_enum_encoding_handling(v:syn::DataEnum,name:syn::Ident,attri
                 }
             }
         }
+
         
         let varfieldrefs = if named {
             quote! {{ #(#field_idents),* }}
@@ -238,6 +255,7 @@ pub (crate) fn data_enum_encoding_handling(v:syn::DataEnum,name:syn::Ident,attri
                     }
                 });
             } else {
+                
                 encoder_variant_handlers.push(quote!{
                     #name::#variant_ident #varfieldrefs => {
                         let my_constructor_id = #constructor_id;
@@ -251,8 +269,10 @@ pub (crate) fn data_enum_encoding_handling(v:syn::DataEnum,name:syn::Ident,attri
             }
         } else {
                 
-            encoder_variant_handlers.push(quote!{
+            
+        encoder_variant_handlers.push(quote!{
                 #name::#variant_ident #varfieldrefs => {
+                    //println!("not ignoring container on item: {}",stringify!(#variant_ident));
                     let my_constructor_id = #constructor_id;
                     let big_num = plutus_data::convert_to_big_num(&my_constructor_id);
                     let mut items = plutus_data::PlutusList::new();

@@ -2,6 +2,7 @@ pub (crate) fn decode_field_value(ty:&syn::Type,attribs:&Vec<String>) -> syn::__
     
     quote!{|p:plutus_data::PlutusData| -> Result<#ty,String> {
         let mut attributes : Vec<String> = vec![#(String::from(#attribs)),*];
+        //println!("Calling {}::from_plutus_data on some data..",stringify!(#ty));
         <#ty>::from_plutus_data(p,&attributes)
     }}}
 
@@ -25,8 +26,8 @@ pub (crate) fn handle_struct_decoding(mut fields:syn::punctuated::Punctuated<syn
         for x in struct_attribs.iter() {attribs.push(x.to_owned())};
         let getter = decode_field_value(&f.ty,&attribs);
         extracted_values.push(match &f.ident {
-            Some(fident) => quote! { #fident : (#getter)(items.get(#i))? },
-            None => quote!{ (#getter)(items.get(#i))? }
+            Some(fident) => quote! { #fident : {(#getter)(items.get(#i))?} },
+            None => quote!{ (#getter)({items.get(#i)})? }
         });
     };
 
@@ -37,7 +38,7 @@ pub (crate) fn handle_struct_decoding(mut fields:syn::punctuated::Punctuated<syn
             if use_unnamed {
                 quote!{ 
                     {if ilen < #field_count {
-                        return Err(format!("Invalid number of (unnamed) items in the plutus data. Found: {} , Expected: {}.. ",ilen,#field_count))
+                        return Err(format!("Invalid number of (unnamed) items in the plutus data. Found: {} , Expected: {}..expected struct type name: {}",ilen,#field_count,#name_string))
                     } else {
                         #name(#(#extracted_values),*) 
                     }}
@@ -45,7 +46,8 @@ pub (crate) fn handle_struct_decoding(mut fields:syn::punctuated::Punctuated<syn
             } else {
                 quote!{  
                     {if ilen < #field_count {
-                        return Err(format!("Invalid number of items in the plutus data. Found: {} , Expected: {}..",ilen,#field_count))
+                        return Err(format!("Invalid number of items in the plutus data. Found: {} , Expected: {}.. expected struct type name: {}",
+                            ilen,#field_count,#name_string))
                     } else {
                         #name { #(#extracted_values),* }
                     }}
@@ -57,12 +59,14 @@ pub (crate) fn handle_struct_decoding(mut fields:syn::punctuated::Punctuated<syn
     
     let result = quote!{
         impl plutus_data::FromPlutusData<#name> for #name {
-            fn from_plutus_data(x:plutus_data::PlutusData,attribs:&Vec<String>) -> Result<#name,String> {
+            fn from_plutus_data(x:plutus_data::PlutusData,_attribs:&Vec<String>) -> Result<#name,String> {
+                //println!("from_plutus_data (struct) was called for type {}",#name_string);
                 let name_str = #name_string;
                 match x.as_constr_plutus_data() {
                     Some(mut cc) => {
                         let items = cc.data();
                         let ilen = items.len();
+                        //println!("We have now entered a constr with {} items. ({})",ilen, stringify!(#name));
                         let result = Ok(#creator);
                         result
                     },
@@ -79,10 +83,18 @@ pub (crate) fn handle_struct_decoding(mut fields:syn::punctuated::Punctuated<syn
 
 
 pub (crate) fn data_enum_decoding_handling(v:syn::DataEnum,name:syn::Ident,attributes:Vec<syn::Attribute>) -> proc_macro::TokenStream {
+    
     let name_string = name.to_string();
+    
     let mut constructor_cases = vec![];
     let enum_attribs = attributes.into_iter().map(|a| a.path.get_ident().unwrap().to_string() )
         .collect::<Vec<String>>();
+
+    if enum_attribs.iter().any(|a|a.to_lowercase() == "ignore_option_container") {
+        panic!("enums should not be marked with ignore_option_container. just mark whatever field contains your option item.")
+    }
+
+    
     for (i,v) in v.variants.iter().enumerate() {
         
         let u64i = i as u64;
@@ -90,17 +102,18 @@ pub (crate) fn data_enum_decoding_handling(v:syn::DataEnum,name:syn::Ident,attri
         let variant_fields = v.fields.clone();
         let field_count = v.fields.len();
 
-        let is_forced = v.clone().attrs.into_iter().any(|a|format!("{:?}",a).contains("force_variant"));
+        let is_forced = v.clone().attrs.into_iter().any(|a|format!("{:?}",a.path.get_ident().unwrap().to_string()).contains("force_variant"));
+        
         if is_forced {
             crate::info(&name,"When decoding items that contain this enum, we will assume the plutus data only contains the data of the forced variant, and not the wrapping emum.");
         }
+
         if field_count == 0 {
             constructor_cases.push(quote! {
                 #u64i => { Ok(#name::#variant_ident) }
             });
             continue;
         }
-        
         let mut cloned_fields = variant_fields.clone();
         
         let mut extracted_values : Vec<_> = vec![];
@@ -109,6 +122,8 @@ pub (crate) fn data_enum_decoding_handling(v:syn::DataEnum,name:syn::Ident,attri
             .map(|a| a.path.get_ident().unwrap().to_string() )
             .collect::<Vec<String>>();
 
+
+
         for (ii,f) in cloned_fields.iter_mut().enumerate() {
 
             let mut attribs = 
@@ -116,30 +131,51 @@ pub (crate) fn data_enum_decoding_handling(v:syn::DataEnum,name:syn::Ident,attri
                         .map(|a| a.path.get_ident().unwrap().to_string() )
                         .collect::<Vec<String>>();
             
+         
             for x in variant_attribs.iter() {attribs.push(x.to_owned())};
-            for x in enum_attribs.clone() {attribs.push(x)};
-            let getter = decode_field_value(&f.ty,&attribs);
 
+           
+            for x in enum_attribs.clone() {attribs.push(x)};
+
+            
+            let getter = decode_field_value(&f.ty,&attribs);
+            
             if is_forced {
                 extracted_values.push(quote! { (#getter)(selfie)? });
             } else {
                 extracted_values.push(match &f.ident {
-                    Some(fident) => quote! {#fident : (#getter)(items.get(#ii))?},
-                    None => quote!{ (#getter)(items.get(#ii))? }
+                    Some(fident) => {
+                        // quote! {
+                        //     #fident : (#getter)({println!("reading named field value: {}",stringify!(#fident));items.get(#ii)})?
+                        // }
+                        quote! {
+                            #fident : (#getter)({items.get(#ii)})?
+                        }
+                    },
+                    None => 
+                        // quote!{ {
+                        //     (#getter)({println!("reading unnamed field number {} value",#ii);items.get(#ii)})?
+                        // }
+                        quote!{ {
+                            (#getter)({items.get(#ii)})?
+                        }
+                    }
                 });
            }
         }
 
         let use_unnamed = v.fields.clone().iter().next().unwrap().ident.is_none();
-
+        //let strident = format!("{}::{}",name.to_string(),variant_ident.to_string());
         let variant_constructor = {
             if field_count == 0 {
                 panic!("Cannot create decoder for struct with no fields..")
             } else {
                 if use_unnamed {
-                    quote!{ Ok(#name::#variant_ident(#(#extracted_values),*)) }
+                    //quote!{ {{println!("using unnamed field for {}",#strident);Ok(#name::#variant_ident(#(#extracted_values),*)) }}}
+                    quote!{ {{Ok(#name::#variant_ident(#(#extracted_values),*)) }}}
                 } else {
-                    quote!{ Ok(#name::#variant_ident { #(#extracted_values),* }) }
+                    //quote!{ {{println!("Using named field for {}",#strident);Ok(#name::#variant_ident { #(#extracted_values),* }) }}}
+                    quote!{ {{Ok(#name::#variant_ident { #(#extracted_values),* }) }}}
                 }
             }
         };
@@ -147,15 +183,19 @@ pub (crate) fn data_enum_decoding_handling(v:syn::DataEnum,name:syn::Ident,attri
         if is_forced {
             return proc_macro::TokenStream::from(quote! {
                 impl plutus_data::FromPlutusData<#name> for #name {
-                    fn from_plutus_data(selfie:plutus_data::PlutusData,attribs:&Vec<String>) -> Result<#name,String> {
+                    fn from_plutus_data(selfie:plutus_data::PlutusData,_attribs:&Vec<String>) -> Result<#name,String> {
                         let name_str = #name_string;
+                        //println!("(forced variant) from_plutus_data (enum) was called for type {}",name_str);
                         #variant_constructor
                     }
                 }
             });
         }
 
-        constructor_cases.push(quote! { #u64i => { #variant_constructor } });
+        constructor_cases.push(quote! { #u64i => { 
+            //println!("Using constructor {}",#u64i);
+            #variant_constructor 
+        } });
 
     };
 
@@ -166,18 +206,20 @@ pub (crate) fn data_enum_decoding_handling(v:syn::DataEnum,name:syn::Ident,attri
         impl plutus_data::FromPlutusData<#name> for #name {
             fn from_plutus_data(x:plutus_data::PlutusData,attribs:&Vec<String>) -> Result<#name,String> {
                 let name_str = #name_string;
+                //println!("from_plutus_data (enum) was called for type {}",name_str);
                 match x.as_constr_plutus_data() {
                     Some(c) => {
                         let constructor = c.alternative();
                         let constructor_u64 = plutus_data::from_bignum(&constructor);
                         let mut items = c.data();
+                        //println!("FOUND {} ITEMS!",items.len());
                         let result = match constructor_u64 {
                             #(#constructor_cases),*
                             i => Err(format!("Unexpected constructor: {}",i))
                         };
                         result
                     },
-                    None => Err(format!("This is not a valid constr data item.. cannot decode into enum.. actual type: {:?}.. ::{:?}::",x.kind(),name_str))
+                    None => Err(format!("This is not a valid constr data item.. cannot decode into enum.. actual type: {:?}.. ::{:?}:: ==> {:?}",x.kind(),name_str,x))
                 }
             }
         }
