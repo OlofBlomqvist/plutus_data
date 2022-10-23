@@ -26,26 +26,33 @@ pub struct ExampleStruct {
     pub opt_test2 : Option<String>
     
 }
-#[derive(ToPlutusDataDerive,FromPlutusDataDerive)]
-pub enum Example {
-    VariantOne(MarloweDatum),
-    // if you always need this enum to be encoded/decoded using the
-    // inner type of a specific variant.
-    #[attr(force_variant)]
-    VariantTwo(String)
-}
-```
 
-
-```rust
-// Encoding to plutus:
-|x:MarloweDatum| {
-    x.to_plutus_data(vec![])
+#[derive(Debug,ToPlutusDataDerive,FromPlutusDataDerive)]
+enum EnumThing {
+    A(Test),
+    B(String)
 }
 
-// Decoding from plutus:
-MarloweDatum::from_plutus_data(x,vec![])
-```
+fn main() {
+    let hello = EnumThing::A(Test { 
+        must_be_hex_string : String::from("AA"),
+        bool: true,
+        bool_as_num: true,
+        option_unwrapped: Some(42),
+        option_wrapped: Some(42)
+    });
+    let encoded = hello.to_plutus_data(&vec![]).unwrap();
+    println!("ENCODED: {:?}",encoded);
+    let decoded = EnumThing::from_plutus_data(encoded,&vec![]).unwrap();
+    println!("DECODED {:?}",decoded);
+}
 
+```
+```text
+
+ENCODED: PlutusData { datum: ConstrPlutusData(ConstrPlutusData { alternative: BigNum(0), data: PlutusList { elems: [PlutusData { datum: ConstrPlutusData(ConstrPlutusData { alternative: BigNum(0), data: PlutusList { elems: [PlutusData { datum: Bytes([170]), original_bytes: None }, PlutusData { datum: ConstrPlutusData(ConstrPlutusData { alternative: BigNum(1), data: PlutusList { elems: [], definite_encoding: None } }), original_bytes: None }, PlutusData { datum: Integer(BigInt(1)), original_bytes: None }, PlutusData { datum: ConstrPlutusData(ConstrPlutusData { alternative: BigNum(0), data: PlutusList { elems: [PlutusData { datum: Integer(BigInt(42)), original_bytes: None }], definite_encoding: None } }), original_bytes: None }, PlutusData { datum: Integer(BigInt(42)), original_bytes: None }], definite_encoding: None } }), original_bytes: None }], definite_encoding: None } }), original_bytes: None }   
+
+DECODED A(Test { must_be_hex_string: "aa", bool: true, bool_as_num: true, option_wrapped: Some(42), option_unwrapped: Some(42) })
+```
 
 
