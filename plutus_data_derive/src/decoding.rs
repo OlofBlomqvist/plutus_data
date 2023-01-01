@@ -70,7 +70,7 @@ pub (crate) fn handle_struct_decoding(mut fields:syn::punctuated::Punctuated<syn
                         let result = Ok(#creator);
                         result
                     },
-                    None => Err(format!("Not valid struct data. Expected constr data but found: {:?}",x.kind()))
+                    None => Err(format!("plutus_data macro ran in to an error while attempting to decode a struct of type {}: Not valid struct data. Expected constr data but found: {:?} --> {:?}",name_str,x.kind(),hex::encode(x.to_bytes())))
                 }
             }
         }
