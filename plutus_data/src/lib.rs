@@ -1,7 +1,13 @@
 #![feature(box_into_inner)]
+
+
+// TODO - Make it so that we don't work directly with plutus data structs from some lib
+// but just the
+
+
 use std::collections::HashMap;
 
-pub use cardano_multiplatform_lib as cml;
+
 pub use cardano_multiplatform_lib::plutus::ConstrPlutusData;
 pub use cardano_multiplatform_lib::plutus::PlutusData;
 pub use cardano_multiplatform_lib::plutus::PlutusList;

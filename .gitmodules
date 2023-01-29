@@ -1,4 +1,0 @@
-[submodule "cml"]
-	path = cml
-	url = https://github.com/OlofBlomqvist/cardano-multiplatform-lib
-	branch = js-as-feature
