@@ -1,6 +1,6 @@
 [package]
 name = "plutus_data"
-version = "0.0.5"
+version = "0.0.6"
 edition = "2021"
 authors = ["Olof Blomqvist <olof@twnet.se>"]
 description = "derive macros for converting between rust data types and plutus-data"
@@ -10,7 +10,7 @@ license-file = "licence"
 [dependencies]
 plutus_data_derive = "0.0.5"
 #plutus_data_derive = { path = "../plutus_data_derive" }
-cardano-multiplatform-lib = "3.1.0"
+cardano-multiplatform-lib = {path="../cml/rust",features=["wasm"]}
 hex = "^0.4.3"
 
 
