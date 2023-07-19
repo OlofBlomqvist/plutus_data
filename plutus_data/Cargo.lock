@@ -251,6 +251,8 @@ dependencies = [
 [[package]]
 name = "plutus_data_derive"
 version = "0.0.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "295a3c57ad40b10bedd23930512162aa7334106795447cc38b7f533365225dd4"
 dependencies = [
  "hex",
  "quote",

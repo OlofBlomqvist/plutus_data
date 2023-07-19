@@ -15,9 +15,9 @@ license-file = "licence"
 #pallas-codec = {path = "c:/users/oblink/documents/github/pallas/pallas-codec" }
 #pallas = { path = "c:/users/oblink/documents/github/pallas/pallas" }
 
-pallas-primitives = "*"
-pallas-codec = "*"
-pallas = "*"
+pallas-primitives = "0.18.1"
+pallas-codec = "0.18.1"
+pallas = "0.18.1"
 
 plutus_data_derive = "0.0.6"
 #plutus_data_derive = { path = "../plutus_data_derive" }
