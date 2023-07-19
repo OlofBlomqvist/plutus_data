@@ -1,0 +1,11 @@
+[package]
+name = "plutus_data_test"
+version = "0.2.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+plutus_data = "0.0.6" 
+#plutus_data = {path="../plutus_data"}
+hex = "*"

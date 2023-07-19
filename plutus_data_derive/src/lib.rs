@@ -103,4 +103,3 @@ pub fn from_plutus_data_macro(input: TokenStream) -> TokenStream {
             data_enum_decoding_handling(vf,name,input.attrs)
     }
 }
-

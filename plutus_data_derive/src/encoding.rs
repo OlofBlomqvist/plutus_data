@@ -69,7 +69,7 @@ pub (crate) fn handle_struct_encoding(
             let vg : Result<plutus_data::PlutusData,String> = {
                 #val_quote
             };
-            items.add(&vg?);
+            items.push(vg?);
         });
     }
     
@@ -86,12 +86,9 @@ pub (crate) fn handle_struct_encoding(
         impl plutus_data::ToPlutusData for #name {
             fn to_plutus_data(&self,attribs:&Vec<String>) -> Result<plutus_data::PlutusData,String> {
                 #woop
-                let mut items = plutus_data::PlutusList::new();
+                let mut items = vec![];
                 #(#encoder_field_handlers)*
-                let bzero = plutus_data::convert_to_big_num(&0);
-                Ok( plutus_data::PlutusData::new_constr_plutus_data(
-                        &plutus_data::ConstrPlutusData::new(&bzero,&items)
-                ) )
+                Ok(plutus_data::cp::make_constr(0,items))
             }
             
         }
@@ -135,11 +132,8 @@ pub (crate) fn data_enum_encoding_handling(v:syn::DataEnum,name:syn::Ident,attri
 
             encoder_variant_handlers.push(quote!{
                 #name::#variant_ident => {
-                    let my_constructor_id = #constructor_id;
-                    let big_num = plutus_data::convert_to_big_num(&my_constructor_id);
-                    let items = plutus_data::PlutusList::new();
-                    let item = plutus_data::ConstrPlutusData::new(&big_num,&items);
-                    Ok(plutus_data::PlutusData::new_constr_plutus_data(&item))
+                    let my_constructor_id = #constructor_id as u64;
+                    Ok(plutus_data::cp::make_constr(my_constructor_id,vec![]))
                 }
             });
 
@@ -208,7 +202,7 @@ pub (crate) fn data_enum_encoding_handling(v:syn::DataEnum,name:syn::Ident,attri
                         let v : Result<plutus_data::PlutusData,String> = {
                             #val_quote
                         };
-                        items.add(&v?);
+                        items.push(v?);
                     }); 
                 },
 
@@ -229,7 +223,7 @@ pub (crate) fn data_enum_encoding_handling(v:syn::DataEnum,name:syn::Ident,attri
                         let v : Result<plutus_data::PlutusData,String> = {
                             #val_quote
                         };
-                        items.add(&v?);
+                        items.push(v?);
                     });
                 }
             }
@@ -248,9 +242,9 @@ pub (crate) fn data_enum_encoding_handling(v:syn::DataEnum,name:syn::Ident,attri
             if field_count == 1 {
                 encoder_variant_handlers.push(quote!{
                     #name::#variant_ident #varfieldrefs => {
-                        let mut items = plutus_data::PlutusList::new();
+                        let mut items = vec![];
                         #(#encoder_field_handlers);*
-                        let result = items.get(0);
+                        let result = items[0].clone();
                         Ok(result)
                     }
                 });
@@ -258,27 +252,23 @@ pub (crate) fn data_enum_encoding_handling(v:syn::DataEnum,name:syn::Ident,attri
                 
                 encoder_variant_handlers.push(quote!{
                     #name::#variant_ident #varfieldrefs => {
-                        let my_constructor_id = #constructor_id;
-                        let big_num = plutus_data::convert_to_big_num(&my_constructor_id);
-                        let mut items = plutus_data::PlutusList::new();
+                        let my_constructor_id = #constructor_id as u64;
+                        let mut items = vec![];
                         #(#encoder_field_handlers);*
-                        let item = plutus_data::ConstrPlutusData::new(&big_num,&items);
-                        Ok(plutus_data::PlutusData::new_constr_plutus_data(&item))
+                        Ok(plutus_data::cp::make_constr(my_constructor_id,items))
                     }
                 });
             }
         } else {
                 
-            
+        
         encoder_variant_handlers.push(quote!{
                 #name::#variant_ident #varfieldrefs => {
                     //println!("not ignoring container on item: {}",stringify!(#variant_ident));
-                    let my_constructor_id = #constructor_id;
-                    let big_num = plutus_data::convert_to_big_num(&my_constructor_id);
-                    let mut items = plutus_data::PlutusList::new();
+                    let my_constructor_id = #constructor_id as u64;
+                    let mut items = vec![];
                     #(#encoder_field_handlers);*
-                    let item = plutus_data::ConstrPlutusData::new(&big_num,&items);
-                    Ok(plutus_data::PlutusData::new_constr_plutus_data(&item))
+                    Ok(plutus_data::cp::make_constr(my_constructor_id,items))
                 }
             });
         }

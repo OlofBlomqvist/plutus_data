@@ -1,97 +1,102 @@
 #![feature(box_into_inner)]
 
-
-// TODO - Make it so that we don't work directly with plutus data structs from some lib
-// but just the
-
-
 use std::collections::HashMap;
 
+pub fn from_bignum<T,T2>(x:T) -> T2 {
+    todo!()
+}
 
-pub use cardano_multiplatform_lib::plutus::ConstrPlutusData;
-pub use cardano_multiplatform_lib::plutus::PlutusData;
-pub use cardano_multiplatform_lib::plutus::PlutusList;
-pub use cardano_multiplatform_lib::plutus::PlutusMap;
-pub use cardano_multiplatform_lib::ledger::common::value::to_bignum;
-pub use cardano_multiplatform_lib::ledger::common::value::from_bignum;
-// use cardano_serialization_lib::utils::BigInt;
-// use cardano_serialization_lib::utils::BigNum;
-// use cardano_serialization_lib::utils::to_bignum;
-use cardano_multiplatform_lib::ledger::common::value::BigInt;
-use cardano_multiplatform_lib::ledger::common::value::BigNum;
-
-
-
+use hex::ToHex;
+use pallas_codec::utils::CborWrap;
+use pallas_primitives::Fragment;
+use pallas_primitives::babbage::Constr;
+pub use pallas_primitives::babbage::PlutusData;
 pub use plutus_data_derive::FromPlutusDataDerive;
 pub use plutus_data_derive::ToPlutusDataDerive;
 
+mod custom_plutus;
 
+pub use custom_plutus::CustomPlutus as cp;
+use custom_plutus::*;
 
 pub trait ToPlutusData {
     fn to_plutus_data(&self,attributes:&Vec<String>) -> Result<PlutusData,String>;
 }
 
+pub use custom_plutus::CustomPlutus as pd;
+
 pub trait FromPlutusData<T> {
     
     fn from_plutus_data(x:PlutusData,attributes:&Vec<String>) -> Result<T,String>;
 }
-
+use std::error::Error;
+pub fn from_bytes(x:&Vec<u8>) -> Result<PlutusData, Box<dyn Error>>  {
+    PlutusData::decode_fragment(x)
+}
+pub fn to_bytes(x:&PlutusData) -> Result<Vec<u8>, Box<dyn Error>>  {
+    x.encode_fragment()
+}
+pub fn to_hex(x:&PlutusData) -> Result<String, Box<dyn Error>> {
+    let xx = x.encode_fragment()?;
+    let hexed : String = xx.encode_hex();
+    Ok(hexed)
+}
+pub fn encode<T : ToPlutusData>(x:&T) -> Result<PlutusData, String>  {
+    x.to_plutus_data(&vec![])
+}
+pub fn encode_vec<T : ToPlutusData + Clone + std::fmt::Debug>(x:&Vec<T>) -> Result<PlutusData, String>  {
+    x.to_plutus_data(&vec![])
+}
 
 impl<T1,T2> FromPlutusData<(T1,T2)> for (T1,T2) where T1: FromPlutusData<T1>, T2: FromPlutusData<T2> {
     fn from_plutus_data(x:PlutusData,attribs:&Vec<String>) -> Result<(T1,T2),String> {
-        match x.as_list()  {
-            Some(p) if p.len() == 2 => {
-                let key_a_plutus_item = p.get(0);
-                let key_b_plutus_item = p.get(1);
-                Ok((T1::from_plutus_data(key_a_plutus_item,&attribs)?,
-                    T2::from_plutus_data(key_b_plutus_item,&attribs)?
+        match x {
+            PlutusData::Constr(p) => {
+                
+                if p.fields.len() != 2 {
+                    return Err(format!("expected tuple (list) with two items.. found {:?} with {} items.",p.tag,p.fields.len()))
+                }
+                
+                let key_a_plutus_item = p.fields[0].clone();
+                let key_b_plutus_item = p.fields[1].clone();
+                Ok((T1::from_plutus_data(key_a_plutus_item,attribs)?,
+                    T2::from_plutus_data(key_b_plutus_item,attribs)?
                 ))
             },
-            Some(_) => Err(String::from("Invalid number of items in tuple.")),
-            None => {
-                match x.as_constr_plutus_data() {
-                    Some(p)=> {
-                        let p = p.data();
-                        if p.len() != 2 {
-                            return Err(format!("expected tuple (list) with two items.. found {:?} with {} items.",x.kind(),p.len()))
-                        }
-                        let key_a_plutus_item = p.get(0);
-                        let key_b_plutus_item = p.get(1);
-                        Ok((T1::from_plutus_data(key_a_plutus_item,attribs)?,
-                            T2::from_plutus_data(key_b_plutus_item,attribs)?
-                        ))
-                    },
-                    None => Err(format!("invalid tuple data.. {:?}: {:?}",x.kind(),x))
+            PlutusData::Array(p) => {
+                if p.len() == 2 {
+                    let key_a_plutus_item = p[0].clone();
+                    let key_b_plutus_item = p[1].clone();
+                    Ok((T1::from_plutus_data(key_a_plutus_item,&attribs)?,
+                        T2::from_plutus_data(key_b_plutus_item,&attribs)?
+                    ))
+                } else {
+                    Err(format!("invalid length for tuple data {p:?}"))
                 }
+            },
+                _ => Err(format!("invalid tuple data {x:?}"))
             }
         }
     }
-}
 
 
 impl<T1,T2> ToPlutusData for (T1,T2) where T1: ToPlutusData , T2: ToPlutusData {
     fn to_plutus_data(&self,attribs:&Vec<String>) -> Result<PlutusData,String> {
         let k = self.0.to_plutus_data(&attribs)?;
         let v = self.1.to_plutus_data(&attribs)?;
-        let mut pl = PlutusList::new();
-        pl.add(&k);
-        pl.add(&v);
-        let cs = ConstrPlutusData::new(
-            &BigNum::zero(), &pl);
-        Ok(PlutusData::new_constr_plutus_data(&cs))
+        Ok(CustomPlutus::make_tup(0,k,v))
+
     }
 }
 
 
 impl<K : ToPlutusData + Clone,V : ToPlutusData + Clone> ToPlutusData for HashMap<K,V> {
     fn to_plutus_data(&self,attribs:&Vec<String>) -> Result<PlutusData,String> {
-        let mut map = PlutusMap::new();
-        for kvp in self.iter() {
-            let encoded_k = kvp.0.clone().to_plutus_data(&attribs);
-            let encoded_v = kvp.1.clone().to_plutus_data(&attribs);
-            map.insert(&encoded_k?,&encoded_v?);
+        if let Some(p) = CustomPlutus::make_map(self,attribs)?.as_pallas() {
+            Ok(p.clone())
+        } else {
+            Err(String::from("to_plutus_data for hashmap failed."))
         }
-        Ok(PlutusData::new_map(&map))
     }
 }
 
@@ -107,73 +112,77 @@ impl<T : FromPlutusData<T>> FromPlutusData<Box<T>> for Box<T> {
     }
 }
 
-impl<T : ToPlutusData> ToPlutusData for Vec<T> {
+impl<T : ToPlutusData + Clone + std::fmt::Debug> ToPlutusData for Vec<T> {
     fn to_plutus_data(&self,attribs:&Vec<String>) -> Result<PlutusData,String> {
-        let mut vec_items = PlutusList::new();
-        for yyy in self {
-            let vx = yyy.to_plutus_data(&attribs);
-            vec_items.add(&vx?);
+        if let Some(p) = CustomPlutus::make_list(self,attribs)?.as_pallas() {
+            Ok(p.clone())
+        } else {
+            Err(String::from("to_plutus_data for vec<T> failed."))
         }
-        Ok(
-            PlutusData::new_list(&vec_items)
-        )
     }
 }
 
 impl<T1 :std::hash::Hash + std::cmp::Eq + FromPlutusData<T1>,T2 : FromPlutusData<T2>> FromPlutusData<HashMap<T1,T2>> for HashMap<T1,T2> {
     fn from_plutus_data(p:PlutusData,attribs:&Vec<String>) -> Result<HashMap<T1,T2>,String> {
-        
-        match p.as_map() {
-            None => Err(format!("Attempting to decode a hashmap but instead found: {:?}.",p.kind())),
-            Some(m) => {
-                let items = m.keys();
+        match p {
+            PlutusData::Map(m) => {
                 let mut result = HashMap::new();
-                for n in 0 .. items.len() {
-                    let the_key = items.get(n);
+                for kvp in m.iter() {
+                    
+                    let the_key = kvp.0.clone();
                     let k = T1::from_plutus_data(the_key.clone(),attribs);
-                    let the_value = m.get(&the_key).map_or(Err(String::from("found null value in plutus data. not supported")),|x|Ok(x))?;
-                    let v = T2::from_plutus_data(the_value,attribs);
+
+                    let the_val = kvp.1.clone();
+                    let v = T2::from_plutus_data(the_val.clone(),attribs);
+
+
+                    // let the_value = m.get(&the_key).map_or(Err(String::from("found null value in plutus data. not supported")),|x|Ok(x))?;
+                    // let v = T2::from_plutus_data(the_value,attribs);
+
                     result.insert(k?,v?);
                 }
+
                 Ok(result)
-            }
+            },
+            _ => Err(format!("Attempting to decode a hashmap but instead found: {:?}.",p))
         }
     }
 }
 
 impl<T : FromPlutusData<T>> FromPlutusData<Vec<T>> for Vec<T> {
     fn from_plutus_data(p:PlutusData,attribs:&Vec<String>) -> Result<Vec<T>,String> {
-        match p.as_list() {
-            Some(pl) => {{
+        match p {
+            PlutusData::Array(pl) => {
                 let mut result : Vec<T> = vec![];
-                for xi in 0 .. pl.len() {
-                    match T::from_plutus_data(pl.get(xi),attribs) {
+                for x in pl {
+                    match T::from_plutus_data(x,attribs) {
                         Ok(v) => { result.push(v) },
                         Err(e) => return Err(format!("when decoding a vector, we got this error: {}",e))
                     } 
                 }
+               
                 Ok(result)
-            }}
-            None => Err(String::from("Failed to decode vec from plutus data because it was not a plutus list."))
+            },
+            _ => Err(String::from("Failed to decode vec from plutus data because it was not a plutus list."))
         }
+
     }
 }
 
 impl FromPlutusData<String> for String {
     fn from_plutus_data(x:PlutusData,attribs:&Vec<String>) -> Result<String,String> {
         let b16 : bool = attribs.iter().any(|a|a.to_lowercase() == "base_16");
-        
-        match x.as_bytes() {
-            Some(bytes) if b16 => {
-                Ok(hex::encode(bytes))
+        match x {
+            PlutusData::BoundedBytes(bytes) if b16 => {
+                Ok(bytes.encode_hex())
             },
-            Some(bytes) => {
+            PlutusData::BoundedBytes(bytes) => {
                 match std::str::from_utf8(&bytes) {
                     Ok(s) => Ok(s.to_owned()),
                     Err(e) => Err(format!("{:?}",e))
                 }  
-            }
-            None => Err(format!("expected string bytes, found something else: {:?}..",x.kind()))
+            },            
+            _ => Err(format!("expected string bytes, found something else: {:?}..",x))
         }
     }
 }
@@ -184,11 +193,11 @@ impl ToPlutusData for String {
         let bytes = String::as_bytes(self).to_vec();
         if b16 {
             match hex::decode(bytes) {
-                Ok(hex_bytes) => Ok(PlutusData::new_bytes(hex_bytes)),
+                Ok(hex_bytes) => Ok(pallas_primitives::alonzo::PlutusData::BoundedBytes(hex_bytes.into())),
                 Err(e) => Err(format!("{:?}",e))
             }
         } else {
-            Ok(PlutusData::new_bytes(bytes))
+            Ok(pallas_primitives::alonzo::PlutusData::BoundedBytes(bytes.into()))
         }
     }
 }
@@ -216,7 +225,7 @@ pub struct ByteVec(Vec<u8>);
 
 impl ToPlutusData for ByteVec {
     fn to_plutus_data(&self,_attributes:&Vec<String>) -> Result<PlutusData,String> {
-        Ok(PlutusData::new_bytes(self.0.clone()))
+        Ok(pallas_primitives::alonzo::PlutusData::BoundedBytes(self.0.clone().into()))
     }
 }
 
@@ -231,19 +240,21 @@ impl<T : FromPlutusData<T>> FromPlutusData<Option<T>> for Option<T> {
                 Err(e) => Err(format!("Failed to unpack (ignore_option_container) option value from plutus data! Error: {}",e))
             }
         } else {
-            return match x.as_constr_plutus_data() {
-                Some(c) => {
-                    match (c.alternative().to_str().as_ref(),c.data().len()) {
-                        ("0",1) => {
-                            Ok(Some(T::from_plutus_data(c.data().get(0),&attribs)?))
+            return match x {
+                PlutusData::Constr(c) => {
+                    //println!("TAG IS {} AND CONSTR IS {:?}",c.tag,c.any_constructor);
+                    let constr = if let Some(a) = c.any_constructor { a } else { c.tag - 121} ;
+                    match (constr,c.fields.len()) {
+                        (0,1) => {
+                            Ok(Some(T::from_plutus_data(c.fields[0].clone(),&attribs)?))
                         },
-                        ("1",0) => Ok(None),
+                        (1,0) => Ok(None),
                         _ => {
                             Err(String::from("failed to unpack option value. not valid const representation."))
                         }
                     }
                 },
-                None => Err(format!("failed to decode option value form plutus data... expected constr, found: {:?}",x.kind())),
+                _ => Err(format!("failed to decode option value form plutus data... expected constr, found: {:?}",x)),
             }
         }
     }
@@ -284,34 +295,32 @@ impl FromPlutusData<bool> for bool {
     fn from_plutus_data(x:PlutusData,attribs:&Vec<String>) -> Result<bool,String> {
         let num_rep : bool = attribs.iter().any(|a|a.to_lowercase() == "repr_bool_as_num");
         if num_rep {
-            match x.as_integer() {
-                Some(n) if n.to_str() == "0" => Ok(false),
-                Some(n) if n.to_str() == "1" => Ok(true),
-                _ => {
-                    match x.as_constr_plutus_data() {
-                        Some(c) if c.alternative().to_str() == "0" && c.data().len() == 0 => {
-                            Err(String::from("failed to decode plutus data to bool using integer representation. it does seem to be a valid constr 0 [] (false) item. perhaps you should try without using the 'repr_bool_as_num' attributes?"))
-                        },
-                        Some(c) if c.alternative().to_str() == "1" && c.data().len() == 0 => {
-                            Err(String::from("failed to decode plutus data to bool using integer representation. it does seem to be a valid constr 10 [] (true) item. perhaps you should try without using the 'repr_bool_as_num' attributes?"))
-                        }
-                        _ => Err(format!("cannot decode bool from {:?}",x))
-                    }
+            match x {
+                PlutusData::BigInt(n) => {
+                    let s = match n {
+                        pallas_primitives::babbage::BigInt::Int(nn) => nn.0.to_string(),
+                        BigInt::BigUInt(nn) => nn.to_string(),
+                        BigInt::BigNInt(nn) => nn.to_string(),
+                    };
+                    Ok(s=="1")
+                },
+                PlutusData::Constr(c) => {
+                    Err(format!("cannot decode bool using repr_bool_as_num. it seems to be encoded as a constr, perhaps you did not mean to apply repr_bool_as_num? {:?}",c))
                 }
+                _ => Err(format!("cannot decode bool with num_rep from {:?}",x))
             }
         } else {
-            match x.as_constr_plutus_data() {
-                Some(c) if c.alternative().to_str() == "0" && c.data().len() == 0 => {
-                    Ok(false)
-                },
-                Some(c) if c.alternative().to_str() == "1" && c.data().len() == 0 => {
-                    Ok(true)
-                },
+            match x {
+                PlutusData::Constr(c) => {
+                    let t = c.tag - 121;
+                    Ok(t == 1)
+                }
                 _ => {
-                    match x.as_integer() {
-                        Some(n) if n.to_str() == "0" => Err(String::from("failed to decode plutus data to bool. you could try to mark the field with attribute 'repr_bool_as_num', in which case this would have been 'False'.")),
-                        Some(n) if n.to_str() == "1" => Err(String::from("failed to decode plutus data to bool. you could try to mark the field with attribute 'repr_bool_as_num', in which case this would have been 'True'.")),
-                        _ => Err(format!("failed to decode this plutus data to bool: {:?}",x)),
+                    match x {
+                        PlutusData::BigInt(n) => {
+                            Err(format!("failed to decode this plutus data to bool using constr repr. it does seem to be a valid integer encoded bool, perhaps try with using repr_bool_as_num? --> {:?}",n))
+                        },
+                        _ => Err(format!("cannot decode bool using constr_rep from {:?}",x))
                     }
                     
                 }
@@ -325,24 +334,10 @@ impl ToPlutusData for bool {
     fn to_plutus_data(&self,attribs:&Vec<String>) -> Result<PlutusData,String> {
         let num_rep : bool = attribs.iter().any(|a|a.to_lowercase() == "repr_bool_as_num");        
         match self {
-            true if num_rep => Ok(PlutusData::new_integer(&BigInt::from(1))),
-            false if num_rep => Ok(PlutusData::new_integer(&BigInt::from(0))),
-            true => Ok(
-                PlutusData::new_constr_plutus_data(
-                    &ConstrPlutusData::new(
-                        &to_bignum(1),
-                        &PlutusList::new()
-                    )
-                )
-            ),
-            false => Ok(
-                PlutusData::new_constr_plutus_data(
-                    &ConstrPlutusData::new(
-                        &to_bignum(0),
-                        &PlutusList::new()
-                    )
-                )
-            ),
+            true if num_rep => Ok(CustomPlutus::big_int(1).as_pallas().unwrap().clone()), // todo : fix
+            false if num_rep => Ok(CustomPlutus::big_int(0).as_pallas().unwrap().clone()), // todo : fix
+            true => Ok(CustomPlutus::make_constr(1, vec![])),
+            false => Ok(CustomPlutus::make_constr(0, vec![])),
         }
     }
 }
@@ -361,11 +356,9 @@ ImplPlutusForNum!(@u64);
 ImplPlutusForNum!(@u128);
 ImplPlutusForNum!(@usize);
 
-
-pub fn convert_to_big_int(i:&i64) -> BigInt { BigInt::from(i.clone()) }
-pub fn convert_to_big_num(i:&i64) -> BigNum { BigNum::from(i.clone() as u64) }
-pub fn convert_u64_to_big_int(i:&u64) -> BigInt { BigInt::from(i.clone()) }
-pub fn convert_u64_to_big_num(i:&u64) -> BigNum { BigNum::from(i.clone()) }
+use pallas_primitives::babbage::BigInt;
+pub fn convert_to_big_int(i:&i64) -> BigInt { CustomPlutus::to_big_int(*i) }
+pub fn convert_u64_to_big_int(i:&u64) -> BigInt { CustomPlutus::to_big_uint(*i) }
 
 mod macros {
     #[macro_export]
@@ -374,30 +367,36 @@ mod macros {
         (@$T:ident) => {
             impl ToPlutusData for $T {
                 fn to_plutus_data(&self,_attribs:&Vec<String>) -> Result<PlutusData,String> {
-                    match BigInt::from_str(&self.to_string()) {
-                        Ok(n) => Ok(PlutusData::new_integer(&n)),
+                    
+                    match &self.to_string().parse::<i64>() {
+                        Ok(n) => Ok(PlutusData::BigInt(pallas_primitives::alonzo::BigInt::Int(pallas_codec::utils::Int::from(*n)))),
                         Err(_) => Err(format!("failed to parse {} to BigInt.",self)),
                     }
                 }
             }
             impl ToPlutusData for &$T {
                 fn to_plutus_data(&self,_attribs:&Vec<String>) -> Result<PlutusData,String> {
-                    match BigInt::from_str(&self.to_string()) {
-                        Ok(n) => Ok(PlutusData::new_integer(&n)),
+                    match &self.to_string().parse::<i64>() {
+                        Ok(n) => Ok(PlutusData::BigInt(pallas_primitives::alonzo::BigInt::Int(pallas_codec::utils::Int::from(*n)))),
                         Err(_) => Err(format!("failed to parse {} to BigInt.",self)),
                     }
                 }
             }
             impl FromPlutusData<$T> for $T {
                 fn from_plutus_data(p:PlutusData,_attribs:&Vec<String>) -> Result<$T,String> {
-                    match p.as_integer() {
-                        Some(vd) => {
-                            match vd.to_str().parse::<$T>() {
+                    match p {
+                        PlutusData::BigInt(n) => {
+                            let s = match n {
+                                pallas_primitives::babbage::BigInt::Int(nn) => nn.0.to_string(),
+                                pallas_primitives::babbage::BigInt::BigUInt(nn) => nn.to_string(),
+                                pallas_primitives::babbage::BigInt::BigNInt(nn) => nn.to_string()
+                            };
+                            match s.parse::<$T>() {
                                 Ok(vc) => Ok(vc),
                                 Err(e) => Err(format!("Failed to convert string to number. {}.",e)),
                             }
                         },
-                        None => Err(format!("failed to parse plutus data to num! input kind: {:?} - inner plutus data: {:?}",p.kind(),p)),
+                        _ => Err(format!("failed to parse plutus data to num! input kind: {:?} - inner plutus data: {:?}",p,p)),
                     }
                 }
             }
@@ -405,19 +404,46 @@ mod macros {
     }
 }
 
-fn empty_constr(tag: u64) -> PlutusData {
-    let tag_num : BigNum = tag.into();
-    let list = PlutusList::new();
-    PlutusData::new_constr_plutus_data(
-        &ConstrPlutusData::new(&tag_num, &list)
-    )
+fn empty_constr(tag_num: u64) -> PlutusData {
+    CustomPlutus::make_constr(tag_num, vec![])
 }
 
-fn wrap_with_constr(tag: u64, data: PlutusData) -> PlutusData {
-    let tag_num : BigNum = tag.into();
-    let mut list = PlutusList::new();
-    list.add(&data);
-    PlutusData::new_constr_plutus_data(
-        &ConstrPlutusData::new(&tag_num, &list)
-    )
+fn wrap_with_constr(tag_num: u64, data: PlutusData) -> PlutusData {
+    CustomPlutus::make_constr(tag_num, vec![data])
 }
+
+
+fn make_thing(tag:u64,items:Vec<PlutusData>) -> PlutusData {   
+    PlutusData::Constr(Constr { 
+        tag: tag, 
+        any_constructor: None, 
+        fields: items
+    })
+}
+
+
+
+// pub struct Banana {}
+// pub fn xxx() {
+//     use crate as plutus_data;
+//     impl FromPlutusData<Banana> for Banana{
+//         fn from_plutus_data(x:plutus_data::PlutusData,attribs:&Vec<String>) -> Result<Banana,String> {
+//             //let name_str = #name_string;
+//             let name_str = "xxx";
+//             //println!("from_plutus_data (enum) was called for type {}",name_str);
+//             // match x {
+//             //     PlutusData::Constr(c) => {
+//             //         let constructor_u64 = c.any_constructor.unwrap() as i64;
+//             //         let mut items = c.fields;
+//             //         //println!("FOUND {} ITEMS!",items.len());
+//             //         //  match constructor_u64 {
+//             //         //     #(#constructor_cases),*
+//             //         //     i => Err(format!("Unexpected constructor: {}",i))
+//             //         // }
+//             //     },
+//             //     _ => Err(format!("This is not a valid constr data item.. cannot decode into enum.. actual type: {:?}.. ::{:?}:: ==> {:?}",x,name_str,x))
+//             // }
+           
+//         }
+//     }
+// }

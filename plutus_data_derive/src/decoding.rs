@@ -26,8 +26,8 @@ pub (crate) fn handle_struct_decoding(mut fields:syn::punctuated::Punctuated<syn
         for x in struct_attribs.iter() {attribs.push(x.to_owned())};
         let getter = decode_field_value(&f.ty,&attribs);
         extracted_values.push(match &f.ident {
-            Some(fident) => quote! { #fident : {(#getter)(items.get(#i))?} },
-            None => quote!{ (#getter)({items.get(#i)})? }
+            Some(fident) => quote! { #fident : {(#getter)(items[#i].clone())?} },
+            None => quote!{ (#getter)({items[#i].clone()})? }
         });
     };
 
@@ -62,15 +62,15 @@ pub (crate) fn handle_struct_decoding(mut fields:syn::punctuated::Punctuated<syn
             fn from_plutus_data(x:plutus_data::PlutusData,_attribs:&Vec<String>) -> Result<#name,String> {
                 //println!("from_plutus_data (struct) was called for type {}",#name_string);
                 let name_str = #name_string;
-                match x.as_constr_plutus_data() {
-                    Some(mut cc) => {
-                        let items = cc.data();
+               match x {
+                    PlutusData::Constr(cc) => {
+                        let items = cc.fields;
                         let ilen = items.len();
                         //println!("We have now entered a constr with {} items. ({})",ilen, stringify!(#name));
                         let result = Ok(#creator);
                         result
                     },
-                    None => Err(format!("plutus_data macro ran in to an error while attempting to decode a struct of type {}: Not valid struct data. Expected constr data but found: {:?} --> {:?}",name_str,x.kind(),hex::encode(x.to_bytes())))
+                    _ => Err(format!("plutus_data macro ran in to an error while attempting to decode a struct of type {}: Not valid struct data. Expected constr data but found: {:?} --> {:?}",name_str,x,plutus_data::to_hex(&x)))
                 }
             }
         }
@@ -149,7 +149,7 @@ pub (crate) fn data_enum_decoding_handling(v:syn::DataEnum,name:syn::Ident,attri
                         //     #fident : (#getter)({println!("reading named field value: {}",stringify!(#fident));items.get(#ii)})?
                         // }
                         quote! {
-                            #fident : (#getter)({items.get(#ii)})?
+                            #fident : (#getter)({items[#ii].clone()})?
                         }
                     },
                     None => 
@@ -157,7 +157,7 @@ pub (crate) fn data_enum_decoding_handling(v:syn::DataEnum,name:syn::Ident,attri
                         //     (#getter)({println!("reading unnamed field number {} value",#ii);items.get(#ii)})?
                         // }
                         quote!{ {
-                            (#getter)({items.get(#ii)})?
+                            (#getter)({items[#ii].clone()})?
                         }
                     }
                 });
@@ -191,7 +191,7 @@ pub (crate) fn data_enum_decoding_handling(v:syn::DataEnum,name:syn::Ident,attri
                 }
             });
         }
-
+        
         constructor_cases.push(quote! { #u64i => { 
             //println!("Using constructor {}",#u64i);
             #variant_constructor 
@@ -207,11 +207,11 @@ pub (crate) fn data_enum_decoding_handling(v:syn::DataEnum,name:syn::Ident,attri
             fn from_plutus_data(x:plutus_data::PlutusData,attribs:&Vec<String>) -> Result<#name,String> {
                 let name_str = #name_string;
                 //println!("from_plutus_data (enum) was called for type {}",name_str);
-                match x.as_constr_plutus_data() {
-                    Some(c) => {
-                        let constructor = c.alternative();
-                        let constructor_u64 = plutus_data::from_bignum(&constructor);
-                        let mut items = c.data();
+                match x {
+                    PlutusData::Constr(cc) => {
+                        //println!("{cc:?}");
+                        let constructor_u64 = if let Some(ccc) = cc.any_constructor { ccc } else { cc.tag - 121 } ;
+                        let mut items = cc.fields;
                         //println!("FOUND {} ITEMS!",items.len());
                         let result = match constructor_u64 {
                             #(#constructor_cases),*
@@ -219,7 +219,7 @@ pub (crate) fn data_enum_decoding_handling(v:syn::DataEnum,name:syn::Ident,attri
                         };
                         result
                     },
-                    None => Err(format!("This is not a valid constr data item.. cannot decode into enum.. actual type: {:?}.. ::{:?}:: ==> {:?}",x.kind(),name_str,x))
+                    _ => Err(format!("This is not a valid constr data item.. cannot decode into enum.. actual type: {:?}.. ::{:?}:: ==> {:?}",x,name_str,x))
                 }
             }
         }

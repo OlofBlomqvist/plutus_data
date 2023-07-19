@@ -1,9 +1,3 @@
-## Plutus Data
-
-Small proc macro implementation for making it easier to work
-with plutus data in rust.
-
-```rust
 use std::collections::HashMap;
 
 use plutus_data::FromPlutusDataDerive;
@@ -63,12 +57,3 @@ fn main() {
     let decoded = EnumThing::from_plutus_data(encoded,&vec![]).unwrap();
     println!("DECODED {:?}",decoded);
 }
-```
-
-```text
-ENCODED: "d8799fd8799fa0d8799f476578616d706c65ffd8799fd8799f4477656565ffffd87a80d87a80004568656c6c6f42aabbd87a8048737472696e676c79ffff"
-
-DECODED A(ExampleStruct { example_c: {}, test1: SomeOtherStruct { example: "example" }, test2: Some(SomeOtherStruct { example: "weee" }), test3: None, example_a: true, example_b: false, utf8_string: "hello", hex_string: "aabb", opt_test1: None, opt_test2: Some("stringly") })
-```
-
-
