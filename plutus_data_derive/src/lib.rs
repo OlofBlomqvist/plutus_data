@@ -46,15 +46,15 @@ pub fn to_plutus_data_macro(input: TokenStream) -> TokenStream {
     match input.data {
 
         syn::Data::Union(_) => {
-            err(&name,&format!("Cannot use union types with the plutus_data crate macros."));
+            err(&name,"Cannot use union types with the plutus_data crate macros.");
             let hmm = quote! {};
-            return TokenStream::from(hmm);
+            TokenStream::from(hmm)
         }
 
         Data::Struct(DataStruct { fields: Fields::Unit, .. }) => {
-            err(&name,&format!("Cannot contain fields of type unit."));
+            err(&name,"Cannot contain fields of type unit.");
             let hmm = quote! {};
-            return TokenStream::from(hmm);
+            TokenStream::from(hmm)
         },
 
         Data::Struct(DataStruct {fields: Fields::Unnamed(FieldsUnnamed { 
@@ -82,13 +82,13 @@ pub fn from_plutus_data_macro(input: TokenStream) -> TokenStream {
     match input.data {
 
         syn::Data::Union(_) => {
-            err(&name,&format!("Cannot use union types with the plutus_data crate macros."));
-            return TokenStream::from(quote! {});
+            err(&name,"Cannot use union types with the plutus_data crate macros.");
+            TokenStream::from(quote! {})
         }
 
         Data::Struct(DataStruct { fields: Fields::Unit, .. }) => {
-            err(&name,&format!("Cannot contain fields of type unit."));
-            return TokenStream::from(quote! {});
+            err(&name,"Cannot contain fields of type unit.");
+            TokenStream::from(quote! {})
         },
 
         Data::Struct(DataStruct {fields: Fields::Unnamed(FieldsUnnamed { 

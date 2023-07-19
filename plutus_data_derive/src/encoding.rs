@@ -1,6 +1,6 @@
 use super::*;
 
-pub (crate) fn encode_field_value(field:&syn::Field,selfie:bool,attribs:&Vec<String>) -> syn::__private::TokenStream2 {
+pub (crate) fn encode_field_value(field:&syn::Field,selfie:bool,attribs:&[String]) -> syn::__private::TokenStream2 {
 
     let ident = 
         match &field.ident {
@@ -8,7 +8,7 @@ pub (crate) fn encode_field_value(field:&syn::Field,selfie:bool,attribs:&Vec<Str
             Some(x) => x
         };
     
-    let ident_ref = if selfie == true { 
+    let ident_ref = if selfie { 
         quote! { self.#ident }
     } else {
         quote! { #ident }
@@ -40,7 +40,7 @@ pub (crate) fn handle_struct_encoding(
     
     for ii in 0..field_iter.len() {
 
-        let mut field = field_iter.next().unwrap();
+        let field = field_iter.next().unwrap();
         let my_field = match &field.ident {
             Some(_f) => field,
             None => {
@@ -64,7 +64,7 @@ pub (crate) fn handle_struct_encoding(
             attribs.push(x.clone())
         }
 
-        let val_quote = encode_field_value(&my_field,field_idents.is_empty(),&attribs);
+        let val_quote = encode_field_value(my_field,field_idents.is_empty(),&attribs);
         encoder_field_handlers.push(quote!{
             let vg : Result<plutus_data::PlutusData,String> = {
                 #val_quote
@@ -84,7 +84,7 @@ pub (crate) fn handle_struct_encoding(
     let combo = quote! {
         use plutus_data::*;
         impl plutus_data::ToPlutusData for #name {
-            fn to_plutus_data(&self,attribs:&Vec<String>) -> Result<plutus_data::PlutusData,String> {
+            fn to_plutus_data(&self,attribs:&[String]) -> Result<plutus_data::PlutusData,String> {
                 #woop
                 let mut items = vec![];
                 #(#encoder_field_handlers)*
@@ -112,7 +112,7 @@ pub (crate) fn data_enum_encoding_handling(v:syn::DataEnum,name:syn::Ident,attri
 
     for ev in variants {
 
-        constructor_id = constructor_id + 1;
+        constructor_id += 1;
         let variant_ident = ev.ident.clone();        
         let field_count = ev.fields.len();
         let variant_attribs = ev.clone().attrs.into_iter()
@@ -177,7 +177,7 @@ pub (crate) fn data_enum_encoding_handling(v:syn::DataEnum,name:syn::Ident,attri
                     named = true;
                     let ff_name = ff.clone().to_string();                   
                     let field_ident = 
-                        if ff_name.contains("#") {
+                        if ff_name.contains('#') {
                             syn::Ident::new_raw(
                                 &ff_name.replace("r#",""),
                                 ff.span()
@@ -287,7 +287,7 @@ pub (crate) fn data_enum_encoding_handling(v:syn::DataEnum,name:syn::Ident,attri
 
     let combo = quote! {
         impl plutus_data::ToPlutusData for #name {
-            fn to_plutus_data(&self,attribs:&Vec<String>) -> Result<plutus_data::PlutusData,String> {
+            fn to_plutus_data(&self,attribs:&[String]) -> Result<plutus_data::PlutusData,String> {
                 match self {
                     #(#encoder_variant_handlers),*
                 }

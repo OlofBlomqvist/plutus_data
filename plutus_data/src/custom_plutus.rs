@@ -1,4 +1,4 @@
-use crate::{ToPlutusData, encode};
+use crate::ToPlutusData;
 use pallas_primitives::babbage::*;
 
 
@@ -9,7 +9,7 @@ impl CustomPlutus {
     pub fn make_map<
         K : ToPlutusData,
         V : ToPlutusData
-    >(original_map:&std::collections::HashMap<K,V>, attributes:&Vec<String>) -> Result<CustomPlutus,String> {
+    >(original_map:&std::collections::HashMap<K,V>, attributes:&[String]) -> Result<CustomPlutus,String> {
         
         let mut items = vec![];
 
@@ -71,18 +71,18 @@ impl CustomPlutus {
         pallas_primitives::babbage::PlutusData::Constr(pallas_primitives::babbage::Constr { 
             tag: 121 + tag,
             any_constructor:  Some(tag), 
-            fields: fields
+            fields
         })
     }
      
     pub fn make_list<
         T : ToPlutusData + std::fmt::Debug
-    >(items:&Vec<T>, attributes:&Vec<String>) -> Result<CustomPlutus,String> {
+    >(items:&Vec<T>, attributes:&[String]) -> Result<CustomPlutus,String> {
         
         let mut encoded_items = vec![];
         
         for yyy in items {
-            let vx = yyy.to_plutus_data(&attributes);
+            let vx = yyy.to_plutus_data(attributes);
             encoded_items.push(vx?);
         }
         let x = PlutusData::Array(encoded_items);

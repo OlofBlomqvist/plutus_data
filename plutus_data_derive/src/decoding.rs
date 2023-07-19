@@ -1,4 +1,4 @@
-pub (crate) fn decode_field_value(ty:&syn::Type,attribs:&Vec<String>) -> syn::__private::TokenStream2 {
+pub (crate) fn decode_field_value(ty:&syn::Type,attribs:&[String]) -> syn::__private::TokenStream2 {
     
     quote!{|p:plutus_data::PlutusData| -> Result<#ty,String> {
         let mut attributes : Vec<String> = vec![#(String::from(#attribs)),*];
@@ -34,32 +34,30 @@ pub (crate) fn handle_struct_decoding(mut fields:syn::punctuated::Punctuated<syn
     let creator = 
         if field_count == 0 {
             panic!("Cannot create decoder for struct with no fields..")
+        } else if use_unnamed {
+            quote!{ 
+                {if ilen < #field_count {
+                    return Err(format!("Invalid number of (unnamed) items in the plutus data. Found: {} , Expected: {}..expected struct type name: {}",ilen,#field_count,#name_string))
+                } else {
+                    #name(#(#extracted_values),*) 
+                }}
+            }
         } else {
-            if use_unnamed {
-                quote!{ 
-                    {if ilen < #field_count {
-                        return Err(format!("Invalid number of (unnamed) items in the plutus data. Found: {} , Expected: {}..expected struct type name: {}",ilen,#field_count,#name_string))
-                    } else {
-                        #name(#(#extracted_values),*) 
-                    }}
-                }
-            } else {
-                quote!{  
-                    {if ilen < #field_count {
-                        return Err(format!("Invalid number of items in the plutus data. Found: {} , Expected: {}.. expected struct type name: {}",
-                            ilen,#field_count,#name_string))
-                    } else {
-                        #name { #(#extracted_values),* }
-                    }}
-                    
-                }
+            quote!{  
+                {if ilen < #field_count {
+                    return Err(format!("Invalid number of items in the plutus data. Found: {} , Expected: {}.. expected struct type name: {}",
+                        ilen,#field_count,#name_string))
+                } else {
+                    #name { #(#extracted_values),* }
+                }}
+                
             }
         };
     
     
     let result = quote!{
         impl plutus_data::FromPlutusData<#name> for #name {
-            fn from_plutus_data(x:plutus_data::PlutusData,_attribs:&Vec<String>) -> Result<#name,String> {
+            fn from_plutus_data(x:plutus_data::PlutusData,_attribs:&[String]) -> Result<#name,String> {
                 //println!("from_plutus_data (struct) was called for type {}",#name_string);
                 let name_str = #name_string;
                match x {
@@ -169,21 +167,19 @@ pub (crate) fn data_enum_decoding_handling(v:syn::DataEnum,name:syn::Ident,attri
         let variant_constructor = {
             if field_count == 0 {
                 panic!("Cannot create decoder for struct with no fields..")
+            } else if use_unnamed {
+                //quote!{ {{println!("using unnamed field for {}",#strident);Ok(#name::#variant_ident(#(#extracted_values),*)) }}}
+                quote!{ {{Ok(#name::#variant_ident(#(#extracted_values),*)) }}}
             } else {
-                if use_unnamed {
-                    //quote!{ {{println!("using unnamed field for {}",#strident);Ok(#name::#variant_ident(#(#extracted_values),*)) }}}
-                    quote!{ {{Ok(#name::#variant_ident(#(#extracted_values),*)) }}}
-                } else {
-                    //quote!{ {{println!("Using named field for {}",#strident);Ok(#name::#variant_ident { #(#extracted_values),* }) }}}
-                    quote!{ {{Ok(#name::#variant_ident { #(#extracted_values),* }) }}}
-                }
+                //quote!{ {{println!("Using named field for {}",#strident);Ok(#name::#variant_ident { #(#extracted_values),* }) }}}
+                quote!{ {{Ok(#name::#variant_ident { #(#extracted_values),* }) }}}
             }
         };
         
         if is_forced {
             return proc_macro::TokenStream::from(quote! {
                 impl plutus_data::FromPlutusData<#name> for #name {
-                    fn from_plutus_data(selfie:plutus_data::PlutusData,_attribs:&Vec<String>) -> Result<#name,String> {
+                    fn from_plutus_data(selfie:plutus_data::PlutusData,_attribs:&[String]) -> Result<#name,String> {
                         let name_str = #name_string;
                         //println!("(forced variant) from_plutus_data (enum) was called for type {}",name_str);
                         #variant_constructor
@@ -204,7 +200,7 @@ pub (crate) fn data_enum_decoding_handling(v:syn::DataEnum,name:syn::Ident,attri
     proc_macro::TokenStream::from(quote!{
         use plutus_data::*;
         impl plutus_data::FromPlutusData<#name> for #name {
-            fn from_plutus_data(x:plutus_data::PlutusData,attribs:&Vec<String>) -> Result<#name,String> {
+            fn from_plutus_data(x:plutus_data::PlutusData,attribs:&[String]) -> Result<#name,String> {
                 let name_str = #name_string;
                 //println!("from_plutus_data (enum) was called for type {}",name_str);
                 match x {
