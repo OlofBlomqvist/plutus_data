@@ -202,16 +202,27 @@ pub (crate) fn data_enum_decoding_handling(v:syn::DataEnum,name:syn::Ident,attri
         impl plutus_data::FromPlutusData<#name> for #name {
             fn from_plutus_data(x:plutus_data::PlutusData,attribs:&[String]) -> Result<#name,String> {
                 let name_str = #name_string;
-                //println!("from_plutus_data (enum) was called for type {}",name_str);
+                //println!("from_plutus_data (enum) was called for type {} -- {:?}",name_str,&x);
                 match x {
                     PlutusData::Constr(cc) => {
                         //println!("{cc:?}");
-                        let constructor_u64 = if let Some(ccc) = cc.any_constructor { ccc } else { cc.tag - 121 } ;
+
+                        let constructor_u64 = match cc.tag {
+                            121..=127 => cc.tag - 121,
+                            1280..=1400 => cc.tag - 1280 + 7,
+                            102 => if let Some(xq) = cc.any_constructor { xq } else {
+                                return  Err(format!("constructor 102 was not expected"))
+                            },
+                            xxx => return  Err(format!("Unexpected constructor for {:?}:{:?} ",name_str,xxx))
+                        };
+
+                        //println!("constr: {:?}",constructor_u64);
+
                         let mut items = cc.fields;
                         //println!("FOUND {} ITEMS!",items.len());
                         let result = match constructor_u64 {
                             #(#constructor_cases),*
-                            i => Err(format!("Unexpected constructor: {}",i))
+                            i => Err(format!("Unexpected constructor for {}: {}...",name_str,i))
                         };
                         result
                     },

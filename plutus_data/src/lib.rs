@@ -78,7 +78,7 @@ impl<T1,T2> ToPlutusData for (T1,T2) where T1: ToPlutusData , T2: ToPlutusData {
     fn to_plutus_data(&self,attribs:&[String]) -> Result<PlutusData,String> {
         let k = self.0.to_plutus_data(attribs)?;
         let v = self.1.to_plutus_data(attribs)?;
-        Ok(CustomPlutus::make_tup(0,k,v))
+        Ok(CustomPlutus::make_tup(k,v))
 
     }
 }
@@ -237,7 +237,17 @@ impl<T : FromPlutusData<T>> FromPlutusData<Option<T>> for Option<T> {
             match x {
                 PlutusData::Constr(c) => {
                     //println!("TAG IS {} AND CONSTR IS {:?}",c.tag,c.any_constructor);
-                    let constr = if let Some(a) = c.any_constructor { a } else { c.tag - 121} ;
+                    
+                    let constr = match c.tag {
+                        121..=127 => c.tag - 121,
+                        1280..=1400 => c.tag - 1280 + 7,
+                        102=> if let Some(xq) = c.any_constructor { xq } else {
+                            return  Err(format!("constructor 102 was not expected"));
+                        },
+                        xxx => return  Err(format!("Unexpected constructor {} ",xxx))
+                    };
+
+                    //let constr = if let Some(a) = c.any_constructor { a } else { c.tag - 121} ;
                     match (constr,c.fields.len()) {
                         (0,1) => {
                             Ok(Some(T::from_plutus_data(c.fields[0].clone(),attribs)?))
@@ -306,8 +316,25 @@ impl FromPlutusData<bool> for bool {
         } else {
             match x {
                 PlutusData::Constr(c) => {
-                    let t = c.tag - 121;
-                    Ok(t == 1)
+                   
+                    let t = match c.tag {
+                        121..=127 => c.tag - 121,
+                        1280..=1400 => c.tag - 1280 + 7,
+                        102 => if let Some(xq) = c.any_constructor { xq } else {
+                            return  Err(format!("constructor 102 was not expected"));
+                        },
+                        xxx => return  Err(format!("Unexpected constructor for {:?}",xxx))
+                    };
+                    
+                    if t == 1 {
+                        return Ok(true);
+                    }
+
+                    if t == 0 {
+                        return Ok(false);
+                    }
+
+                    return  Err(format!("Unexpected constructor a boolean! expected 1 or 0 but found: {t}"))
                 }
                 _ => {
                     match x {

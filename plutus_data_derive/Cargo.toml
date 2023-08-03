@@ -1,6 +1,6 @@
 [package]
 name = "plutus_data_derive"
-version = "0.0.6"
+version = "0.0.7"
 edition = "2021"
 authors = ["Olof Blomqvist <olof@twnet.se>"]
 repository = "https://github.com/OlofBlomqvist/plutus_data"

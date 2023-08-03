@@ -59,18 +59,22 @@ impl CustomPlutus {
         Self(PlutusData::BigInt(pallas_primitives::alonzo::BigInt::Int(pallas_codec::utils::Int::from(n))))
     }
     
-    pub(crate) fn make_tup(tag:u64,key:pallas_primitives::babbage::PlutusData,value:pallas_primitives::babbage::PlutusData) -> pallas_primitives::babbage::PlutusData {
+    pub(crate) fn make_tup(key:pallas_primitives::babbage::PlutusData,value:pallas_primitives::babbage::PlutusData) -> pallas_primitives::babbage::PlutusData {
         pallas_primitives::babbage::PlutusData::Constr(pallas_primitives::babbage::Constr { 
-            tag: tag + 121, 
-            any_constructor:  Some(tag), 
+            tag: 121, 
+            any_constructor:None, 
             fields: vec![key,value]
         })
     }
     
-    pub fn make_constr(tag:u64,fields:Vec<pallas_primitives::babbage::PlutusData>) -> pallas_primitives::babbage::PlutusData {
+    pub fn make_constr(plutus_tag:u64,fields:Vec<pallas_primitives::babbage::PlutusData>) -> pallas_primitives::babbage::PlutusData {
         pallas_primitives::babbage::PlutusData::Constr(pallas_primitives::babbage::Constr { 
-            tag: 121 + tag,
-            any_constructor:  Some(tag), 
+            tag: match plutus_tag {
+                0..=6 => plutus_tag + 121,
+                7..=127 => plutus_tag - 7 + 1280,
+                x => x,
+            },
+            any_constructor: Some(plutus_tag), 
             fields
         })
     }

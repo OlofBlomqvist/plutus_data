@@ -1,6 +1,6 @@
 [package]
 name = "plutus_data"
-version = "0.0.6"
+version = "0.0.7"
 edition = "2021"
 authors = ["Olof Blomqvist <olof@twnet.se>"]
 description = "derive macros for converting between rust data types and plutus-data"
@@ -19,7 +19,7 @@ pallas-primitives = "0.18.1"
 pallas-codec = "0.18.1"
 pallas = "0.18.1"
 
-plutus_data_derive = "0.0.6"
+plutus_data_derive = "0.0.7"
 #plutus_data_derive = { path = "../plutus_data_derive" }
 hex = "^0.4.3"
 
