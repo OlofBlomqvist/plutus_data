@@ -1,6 +1,7 @@
 #![feature(box_into_inner)]
 
 use std::collections::HashMap;
+use std::collections::BTreeMap;
 
 use hex::ToHex;
 use pallas_primitives::Fragment;
@@ -94,6 +95,15 @@ impl<K : ToPlutusData + Clone,V : ToPlutusData + Clone> ToPlutusData for HashMap
     }
 }
 
+impl<K : ToPlutusData + Clone,V : ToPlutusData + Clone> ToPlutusData for BTreeMap<K,V> {
+    fn to_plutus_data(&self,attribs:&[String]) -> Result<PlutusData,String> {
+        if let Some(p) = CustomPlutus::make_bt_map(self,attribs)?.as_pallas() {
+            Ok(p.clone())
+        } else {
+            Err(String::from("to_plutus_data for btreemap failed."))
+        }
+    }
+}
 
 
 impl<T : FromPlutusData<T>> FromPlutusData<Box<T>> for Box<T> {
@@ -139,6 +149,30 @@ impl<T1 :std::hash::Hash + std::cmp::Eq + FromPlutusData<T1>,T2 : FromPlutusData
                 Ok(result)
             },
             _ => Err(format!("Attempting to decode a hashmap but instead found: {:?}.",p))
+        }
+    }
+}
+
+
+impl<T1 : Ord + std::cmp::Eq + FromPlutusData<T1>,T2 : FromPlutusData<T2>> FromPlutusData<BTreeMap<T1,T2>> for BTreeMap<T1,T2> {
+    fn from_plutus_data(p:PlutusData,attribs:&[String]) -> Result<BTreeMap<T1,T2>,String> {
+        match p {
+            PlutusData::Map(m) => {
+                let mut result = BTreeMap::new();
+                for kvp in m.iter() {
+                    
+                    let the_key = kvp.0.clone();
+                    let k = T1::from_plutus_data(the_key.clone(),attribs);
+
+                    let the_val = kvp.1.clone();
+                    let v = T2::from_plutus_data(the_val.clone(),attribs);
+
+                    result.insert(k?,v?);
+                }
+
+                Ok(result)
+            },
+            _ => Err(format!("Attempting to decode a btreemap but instead found: {:?}.",p))
         }
     }
 }
@@ -244,7 +278,7 @@ impl<T : FromPlutusData<T>> FromPlutusData<Option<T>> for Option<T> {
                         102=> if let Some(xq) = c.any_constructor { xq } else {
                             return  Err(format!("constructor 102 was not expected"));
                         },
-                        xxx => return  Err(format!("Unexpected constructor {} ",xxx))
+                        xxx => return  Err(format!("Unexpected constructor {} when decoding an item of type {}",xxx,std::any::type_name::<T>()))
                     };
 
                     //let constr = if let Some(a) = c.any_constructor { a } else { c.tag - 121} ;

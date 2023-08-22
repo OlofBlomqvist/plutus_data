@@ -25,6 +25,26 @@ impl CustomPlutus {
             )
         )))
     }
+      
+    pub fn make_bt_map<
+        K : ToPlutusData,
+        V : ToPlutusData
+    >(original_map:&std::collections::BTreeMap<K,V>, attributes:&[String]) -> Result<CustomPlutus,String> {
+        
+        let mut items = vec![];
+
+        for kvp in original_map.iter() {
+            let encoded_k = kvp.0.to_plutus_data(attributes)?;
+            let encoded_v = kvp.1.to_plutus_data(attributes)?;
+            items.push((encoded_k,encoded_v));
+        }
+
+        Ok(CustomPlutus(PlutusData::Map(
+            pallas_codec::utils::KeyValuePairs::Def(
+                items
+            )
+        )))
+    }
 
     pub fn to_hex(&self) -> String {
         use pallas_primitives::Fragment;
