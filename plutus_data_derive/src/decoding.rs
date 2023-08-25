@@ -2,7 +2,7 @@ pub (crate) fn decode_field_value(ty:&syn::Type,attribs:&[String]) -> syn::__pri
     
     quote!{|p:plutus_data::PlutusData| -> Result<#ty,String> {
         let mut attributes : Vec<String> = vec![#(String::from(#attribs)),*];
-        //println!("Calling {}::from_plutus_data on some data..",stringify!(#ty));
+        //println!("Calling {}::from_plutus_data on data: {:?}",stringify!(#ty),plutus_data::to_hex(&p));
         <#ty>::from_plutus_data(p,&attributes)
     }}}
 
@@ -144,7 +144,7 @@ pub (crate) fn data_enum_decoding_handling(v:syn::DataEnum,name:syn::Ident,attri
                 extracted_values.push(match &f.ident {
                     Some(fident) => {
                         // quote! {
-                        //     #fident : (#getter)({println!("reading named field value: {}",stringify!(#fident));items.get(#ii)})?
+                        //     #fident : (#getter)({println!("reading named field value: {}",stringify!(#fident));items[#ii].clone()})?
                         // }
                         quote! {
                             #fident : (#getter)({items[#ii].clone()})?
@@ -152,7 +152,7 @@ pub (crate) fn data_enum_decoding_handling(v:syn::DataEnum,name:syn::Ident,attri
                     },
                     None => 
                         // quote!{ {
-                        //     (#getter)({println!("reading unnamed field number {} value",#ii);items.get(#ii)})?
+                        //     (#getter)({println!("reading unnamed field number {} value",#ii);items[#ii].clone()})?
                         // }
                         quote!{ {
                             (#getter)({items[#ii].clone()})?
