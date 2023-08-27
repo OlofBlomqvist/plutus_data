@@ -94,7 +94,7 @@ impl CustomPlutus {
                 7..=127 => plutus_tag - 7 + 1280,
                 x => x,
             },
-            any_constructor: Some(plutus_tag), 
+            any_constructor: None,
             fields
         })
     }

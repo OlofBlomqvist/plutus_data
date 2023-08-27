@@ -37,7 +37,12 @@ use encoding::*;
 use decoding::*;
 
 
-#[proc_macro_derive(ToPlutusDataDerive,attributes(base_16,force_variant,repr_bool_as_num,ignore_option_container))]
+#[proc_macro_derive(ToPlutusDataDerive,attributes(
+    base_16,
+    force_variant,repr_bool_as_num,
+    ignore_option_container,
+    debug_re_encoding
+))]
 pub fn to_plutus_data_macro(input: TokenStream) -> TokenStream {
 
     let input = parse_macro_input!(input as DeriveInput);

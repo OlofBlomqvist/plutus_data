@@ -28,9 +28,27 @@ use std::error::Error;
 pub fn from_bytes(x:&[u8]) -> Result<PlutusData, Box<dyn Error>>  {
     PlutusData::decode_fragment(x)
 }
+pub fn from_bytes_specific<T:FromPlutusData<T>>(x:&[u8]) -> Result<T, String>  {
+    let pd = PlutusData::decode_fragment(x).map_err(|e|format!("{:?}",e))?;
+    T::from_plutus_data(pd, &vec![]).map_err(|e|format!("{:?}",e))
+}
+pub fn from_bytes_specific_debug<T:FromPlutusData<T>>(x:&[u8]) -> Result<T, String>  {
+    let pd = PlutusData::decode_fragment(x).map_err(|e|format!("{:?}",e))?;
+    T::from_plutus_data(pd, &vec!["debug_re_encoding".into()]).map_err(|e|format!("{:?}",e))
+}
 pub fn to_bytes(x:&PlutusData) -> Result<Vec<u8>, Box<dyn Error>>  {
     x.encode_fragment()
 }
+pub fn from_hex<T:FromPlutusData<T>>(x:&str) -> Result<T,String> {
+    let bytes = hex::decode(&x).map_err(|e|format!("{:?}",e))?;
+    let pd = PlutusData::decode_fragment(&bytes).map_err(|e|format!("{:?}",e))?;
+    T::from_plutus_data(pd, &vec![]).map_err(|e|format!("{:?}",e))
+}   
+pub fn from_hex_debug<T:FromPlutusData<T>>(x:&str) -> Result<T,String> {
+    let bytes = hex::decode(&x).map_err(|e|format!("{:?}",e))?;
+    let pd = PlutusData::decode_fragment(&bytes).map_err(|e|format!("{:?}",e))?;
+    T::from_plutus_data(pd, &vec!["debug_re_encoding".into()]).map_err(|e|format!("{:?}",e))
+}   
 pub fn to_hex(x:&PlutusData) -> Result<String, Box<dyn Error>> {
     let xx = x.encode_fragment()?;
     let hexed : String = xx.encode_hex();
@@ -95,7 +113,7 @@ impl<K : ToPlutusData + Clone,V : ToPlutusData + Clone> ToPlutusData for HashMap
     }
 }
 
-impl<K : ToPlutusData + Clone,V : ToPlutusData + Clone> ToPlutusData for BTreeMap<K,V> {
+impl<K : ToPlutusData + Clone + Ord,V : ToPlutusData + Clone + Ord> ToPlutusData for BTreeMap<K,V> {
     fn to_plutus_data(&self,attribs:&[String]) -> Result<PlutusData,String> {
         if let Some(p) = CustomPlutus::make_bt_map(self,attribs)?.as_pallas() {
             Ok(p.clone())

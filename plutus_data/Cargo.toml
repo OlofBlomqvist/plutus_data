@@ -1,6 +1,6 @@
 [package]
 name = "plutus_data"
-version = "0.0.8"
+version = "0.0.9"
 edition = "2021"
 authors = ["Olof Blomqvist <olof@twnet.se>"]
 description = "derive macros for converting between rust data types and plutus-data"
@@ -8,18 +8,11 @@ repository = "https://github.com/OlofBlomqvist/plutus_data"
 license-file = "licence"
 
 [dependencies]
-#plutus_data_derive = "0.0.5"
-#pallas = "*"
-
-#pallas-primitives = { path = "c:/users/oblink/documents/github/pallas/pallas-primitives" }
-#pallas-codec = {path = "c:/users/oblink/documents/github/pallas/pallas-codec" }
-#pallas = { path = "c:/users/oblink/documents/github/pallas/pallas" }
-
 pallas-primitives = "0.18.1"
 pallas-codec = "0.18.1"
 pallas = "0.18.1"
 
-plutus_data_derive = "0.0.7"
+plutus_data_derive = "0.0.8"
 #plutus_data_derive = { path = "../plutus_data_derive" }
 hex = "^0.4.3"
 
