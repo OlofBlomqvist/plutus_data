@@ -432,6 +432,8 @@ ImplPlutusForNum!(@usize);
 use pallas_primitives::babbage::BigInt;
 pub fn convert_to_big_int(i:&i64) -> BigInt { CustomPlutus::to_big_int(*i) }
 pub fn convert_u64_to_big_int(i:&u64) -> BigInt { CustomPlutus::to_big_uint(*i) }
+pub fn convert_to_big_i128(i:&i128) -> Result<BigInt,String> { CustomPlutus::to_big_int128(*i) }
+pub fn convert_u64_to_u128(i:&u128) -> Result<BigInt,String> { CustomPlutus::to_big_uint128(*i) }
 
 mod macros {
     #[macro_export]
@@ -440,17 +442,22 @@ mod macros {
         (@$T:ident) => {
             impl ToPlutusData for $T {
                 fn to_plutus_data(&self,_attribs:&[String]) -> Result<PlutusData,String> {
-                    
-                    match &self.to_string().parse::<i64>() {
-                        Ok(n) => Ok(PlutusData::BigInt(pallas_primitives::alonzo::BigInt::Int(pallas_codec::utils::Int::from(*n)))),
-                        Err(_) => Err(format!("failed to parse {} to BigInt.",self)),
+                    match &self.to_string().parse::<i128>() {
+                        Ok(big_number) => {
+                            let num = pallas_codec::utils::Int::try_from(*big_number).map_err(|e|format!("{e:?}"))?;
+                            Ok(PlutusData::BigInt(pallas_primitives::alonzo::BigInt::Int(num)))
+                        },
+                        Err(e) => Err(format!("failed to parse {} to BigInt. {e:?}",self)),
                     }
                 }
             }
             impl ToPlutusData for &$T {
                 fn to_plutus_data(&self,_attribs:&[String]) -> Result<PlutusData,String> {
-                    match &self.to_string().parse::<i64>() {
-                        Ok(n) => Ok(PlutusData::BigInt(pallas_primitives::alonzo::BigInt::Int(pallas_codec::utils::Int::from(*n)))),
+                    match &self.to_string().parse::<i128>() {
+                        Ok(big_number) => {
+                            let num = pallas_codec::utils::Int::try_from(*big_number).map_err(|e|format!("{e:?}"))?;
+                            Ok(PlutusData::BigInt(pallas_primitives::alonzo::BigInt::Int(num)))
+                        }
                         Err(_) => Err(format!("failed to parse {} to BigInt.",self)),
                     }
                 }

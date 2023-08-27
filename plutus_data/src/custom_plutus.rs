@@ -75,6 +75,20 @@ impl CustomPlutus {
         pallas_primitives::alonzo::BigInt::Int(pallas_codec::utils::Int::from(n as i64))
     }
 
+    pub fn to_big_int128(n:i128) -> Result<pallas_primitives::alonzo::BigInt,String> {
+        Ok(pallas_primitives::alonzo::BigInt::Int(
+            pallas_codec::utils::Int::try_from(n)
+                .map_err(|e|format!("{e:?}"))?
+        ))
+    }
+
+    pub fn to_big_uint128(n:u128) -> Result<pallas_primitives::alonzo::BigInt,String> {
+        Ok(pallas_primitives::alonzo::BigInt::Int(
+            pallas_codec::utils::Int::try_from(n as i128)
+                .map_err(|e|format!("{e:?}"))?
+        ))
+    }
+
     pub fn big_int(n:i64) -> Self {
         Self(PlutusData::BigInt(pallas_primitives::alonzo::BigInt::Int(pallas_codec::utils::Int::from(n))))
     }
