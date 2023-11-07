@@ -1,66 +1,72 @@
 pub (crate) fn decode_field_value(ty:&syn::Type,attribs:&[String]) -> syn::__private::TokenStream2 {
     
+    if !attribs.contains(&"debug_re_encoding".to_string()) {
+        return quote!{|p:plutus_data::PlutusData| -> Result<#ty,String> {
+            let mut attributes : Vec<String> = vec![#(String::from(#attribs)),*];
+
+            let ts = stringify!(#ty);
+            <#ty>::from_plutus_data(p.clone(),&attributes)
+
+        }}
+    }
+
     quote!{|p:plutus_data::PlutusData| -> Result<#ty,String> {
         let mut attributes : Vec<String> = vec![#(String::from(#attribs)),*];
 
         let ts = stringify!(#ty);
+        let debug_atrs = [attributes,vec!["debug_re_encoding".to_string()]].concat();
 
-        if attributes.clone().contains(&"debug_re_encoding".to_string()) || outer_attribs.clone().contains(&"debug_re_encoding".to_string()){
-            
-            let debug_atrs = [attributes,vec!["debug_re_encoding".to_string()]].concat();
+        let item = <#ty>::from_plutus_data(p.clone(),&debug_atrs);
+        let re_encoded = item.clone().unwrap().to_plutus_data(&debug_atrs).unwrap();
 
-            let item = <#ty>::from_plutus_data(p.clone(),&debug_atrs);
-            let re_encoded = item.clone().unwrap().to_plutus_data(&debug_atrs).unwrap();
+        let re_hex : String = plutus_data::to_hex(&re_encoded).unwrap();
+        let orig_hex : String = plutus_data::to_hex(&p).unwrap();
 
-            let re_hex : String = plutus_data::to_hex(&re_encoded).unwrap();
-            let orig_hex : String = plutus_data::to_hex(&p).unwrap();
-
-            if re_hex != orig_hex {   
-                println!("\n======== ENC/DEC MISSMATCH FOUND FOR {} ================\n",stringify!(#ty));
-                println!("original hex was: {}\n",orig_hex);
-                println!("re-encoded hex  : {}\n",re_hex);
-                println!("decoded item: {:#?}\n",&item);
-                println!("---------------------------------\n");
-                println!("\noriginal plutus data: {:?}\n",&p);
-                println!("---------------------------------\n");
-                println!("\nplutus data from re : {:?}\n",&re_encoded);
-                println!("========================================\n");
-                println!("\n");
+        if re_hex != orig_hex {   
+            println!("\n======== ENC/DEC MISSMATCH FOUND FOR {} ================\n",stringify!(#ty));
+            println!("original hex was: {}\n",orig_hex);
+            println!("re-encoded hex  : {}\n",re_hex);
+            println!("decoded item: {:#?}\n",&item);
+            println!("---------------------------------\n");
+            println!("\noriginal plutus data: {:?}\n",&p);
+            println!("---------------------------------\n");
+            println!("\nplutus data from re : {:?}\n",&re_encoded);
+            println!("========================================\n");
+            println!("\n");
 
 
-                match (&p,&re_encoded) {
-                    (PlutusData::Map(original_map),PlutusData::Map(new_map)) => {
-            
-                        for (i,item) in original_map.iter().enumerate() {
-                        let h = plutus_data::to_hex(&item.0).unwrap();
+            match (&p,&re_encoded) {
+                (PlutusData::Map(original_map),PlutusData::Map(new_map)) => {
+        
+                    for (i,item) in original_map.iter().enumerate() {
+                    let h = plutus_data::to_hex(&item.0).unwrap();
+                    println!("[original array item {i}] --> {h}");
+                    };
+                    for (i,item) in new_map.iter().enumerate() {
+                    let h = plutus_data::to_hex(&item.0).unwrap();
+                    println!("[new array item {i}] --> {h}");
+                }
+            },
+                (PlutusData::Array(original_arr),PlutusData::Array(new_arr)) => {
+                    for (i,item) in original_arr.iter().enumerate() {
+                        let h = plutus_data::to_hex(item).unwrap();
                         println!("[original array item {i}] --> {h}");
-                        };
-                        for (i,item) in new_map.iter().enumerate() {
-                        let h = plutus_data::to_hex(&item.0).unwrap();
+                    };
+                    for (i,item) in new_arr.iter().enumerate() {
+                        let h = plutus_data::to_hex(item).unwrap();
                         println!("[new array item {i}] --> {h}");
                     }
                 },
-                    (PlutusData::Array(original_arr),PlutusData::Array(new_arr)) => {
-                        for (i,item) in original_arr.iter().enumerate() {
-                            let h = plutus_data::to_hex(item).unwrap();
-                            println!("[original array item {i}] --> {h}");
-                        };
-                        for (i,item) in new_arr.iter().enumerate() {
-                            let h = plutus_data::to_hex(item).unwrap();
-                            println!("[new array item {i}] --> {h}");
-                        }
-                    },
-                    _ => {}
-                }
-
+                _ => {}
             }
-            //<#ty>::test();
-            item
-        } else {
-            <#ty>::from_plutus_data(p.clone(),&attributes)
-        }
 
-    }}}
+        }
+        //<#ty>::test();
+        item
+
+        }
+    }
+}
 
 pub (crate) fn handle_struct_decoding(mut fields:syn::punctuated::Punctuated<syn::Field,syn::token::Comma>,name:syn::Ident,attributes:Vec<syn::Attribute>) -> proc_macro::TokenStream {
     
@@ -115,7 +121,7 @@ pub (crate) fn handle_struct_decoding(mut fields:syn::punctuated::Punctuated<syn
             fn from_plutus_data(x:plutus_data::PlutusData,outer_attribs:&[String]) -> Result<#name,String> {
                 //println!("from_plutus_data (struct) was called for type {}",#name_string);
                 let name_str = #name_string;
-               match x {
+                match x {
                     PlutusData::Constr(cc) => {
                         let items = cc.fields;
                         let ilen = items.len();
