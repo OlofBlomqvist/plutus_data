@@ -1,7 +1,7 @@
 
 #![feature(proc_macro_diagnostic)]
 use quote::*;
-use proc_macro::{TokenStream};
+use proc_macro::TokenStream;
 use syn::{parse_macro_input, DeriveInput, Data, DataStruct, Fields,FieldsNamed,FieldsUnnamed};
 
 #[macro_use] extern crate quote;
